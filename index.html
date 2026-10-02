@@ -112,26 +112,27 @@
   </header>
   <main>
     <section class="story" aria-labelledby="title">
-      <p class="eyebrow">The gates are being tended</p>
+      <p class="eyebrow">Private alpha access</p>
       <h1 id="title">Rune Haven<br>Alpha</h1>
-      <p class="lead" id="lead">The realm is under maintenance while we prepare the next journey. Verify your Solana wallet to check alpha access.</p>
-      <p class="lore-line">Your wallet address is your alpha ID. A signature proves ownership; your private key never leaves your wallet.</p>
+      <p class="lead" id="lead">Rune Haven Alpha is invite-only. Verify your Solana wallet to check access.</p>
+      <p class="lore-line">Your Solana wallet address identifies your alpha access. A one-time signature proves ownership; your private key never leaves your wallet.</p>
     </section>
     <section class="gate" aria-labelledby="gate-title">
       <h2 id="gate-title">Enter the realm</h2>
-      <p class="gate-copy">Connect Phantom on Solana. You’ll review a one-time signature request before your access is checked.</p>
+      <p class="gate-copy">Connect Phantom to check whether your wallet is approved for the alpha.</p>
       <button class="connect" id="connect">Connect Phantom</button>
       <p class="wallet-line" id="wallet-line"></p>
-      <p class="message" id="message" role="status" aria-live="polite">Checking the gate status…</p>
+      <p class="message" id="message" role="status" aria-live="polite">Checking alpha access…</p>
       <div class="gate-rule"></div>
-      <div class="access-state"><span>World status</span><strong id="maintenance-state">Loading</strong></div>
+      <div class="access-state"><span>Access</span><strong id="alpha-state">Loading</strong></div>
       <a class="download-link" id="download" href="https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/Rune.Haven.Setup.exe" download="Rune.Haven.Setup.exe">Access granted · Download launcher</a>
       <section class="admin" id="admin" aria-label="Alpha access administration">
-        <h3>Gatekeeper settings</h3>
-        <label class="toggle"><input id="maintenance-toggle" type="checkbox"><span>Maintenance mode</span></label>
-        <label class="wallets" for="allowlist">Allowed Solana wallet IDs, one per line</label>
-        <textarea id="allowlist" spellcheck="false" placeholder="Wallet address"></textarea>
-        <button class="admin-save" id="save">Save access settings</button>
+        <h3>Alpha access controls</h3>
+        <p class="gate-copy">Only the configured admin wallet can view or edit these addresses.</p>
+        <label class="toggle"><input id="alpha-open-toggle" type="checkbox"><span>Open alpha to all wallets</span></label>
+        <label class="wallets" for="allowlist">Approved Solana wallet addresses</label>
+        <textarea id="allowlist" spellcheck="false" placeholder="One wallet address per line"></textarea>
+        <button class="admin-save" id="save">Save alpha access</button>
       </section>
     </section>
   </main>
@@ -144,7 +145,7 @@
   const downloadLink = $("download");
   const adminTokenKey = "runehaven-alpha-admin";
   let walletAddress = "";
-  let maintenanceMode = true;
+  let alphaOpen = false;
 
   const platform = navigator.userAgentData?.platform || navigator.platform || "";
   const macLauncher = /mac/i.test(platform);
@@ -174,17 +175,17 @@
   async function loadStatus() {
     try {
       const state = await api("/api/alpha/status");
-      maintenanceMode = state.maintenance_mode;
-      $("maintenance-state").textContent = maintenanceMode ? "Maintenance" : "Open alpha";
-      $("status-chip").textContent = maintenanceMode ? "Maintenance · Alpha" : "Alpha is open";
-      $("lead").textContent = maintenanceMode
-        ? "The realm is under maintenance while we prepare the next journey. Verify your Solana wallet to check alpha access."
-        : "The gates are open. Connect your Solana wallet to enter Rune Haven Alpha.";
-      setMessage(maintenanceMode
-        ? "Maintenance is active. Connect an approved wallet to check access."
-        : "Alpha access is open. Connect your wallet to enter.");
+      alphaOpen = state.alpha_open;
+      $("alpha-state").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
+      $("status-chip").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
+      $("lead").textContent = alphaOpen
+        ? "Alpha access is open. Connect your Solana wallet to enter Rune Haven."
+        : "Rune Haven Alpha is invite-only. Verify your Solana wallet to check access.";
+      setMessage(alphaOpen
+        ? "Alpha access is open. Connect your wallet to enter."
+        : "Invite-only alpha. Connect an approved wallet to check access.");
     } catch (error) {
-      $("maintenance-state").textContent = "Status unavailable";
+      $("alpha-state").textContent = "Status unavailable";
       setMessage(error.message, "error");
     }
   }
@@ -227,7 +228,7 @@
   async function loadAdmin(token) {
     const state = await api("/api/alpha/admin/state", null, token);
     $("admin").style.display = "block";
-    $("maintenance-toggle").checked = state.maintenance_mode;
+    $("alpha-open-toggle").checked = state.alpha_open;
     $("allowlist").value = state.allowed_wallets.join("\n");
   }
 
@@ -250,12 +251,12 @@
     const allowed_wallets = $("allowlist").value.split(/\r?\n/).map((wallet) => wallet.trim()).filter(Boolean);
     try {
       await api("/api/alpha/admin/state", {
-        maintenance_mode: $("maintenance-toggle").checked,
+        alpha_open: $("alpha-open-toggle").checked,
         allowed_wallets
       }, token, "PUT");
-      maintenanceMode = $("maintenance-toggle").checked;
-      $("maintenance-state").textContent = maintenanceMode ? "Maintenance" : "Open alpha";
-      $("status-chip").textContent = maintenanceMode ? "Maintenance · Alpha" : "Alpha is open";
+      alphaOpen = $("alpha-open-toggle").checked;
+      $("alpha-state").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
+      $("status-chip").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
       setMessage("Access settings saved.", "success");
     } catch (error) {
       setMessage(error.message || "Could not save access settings.", "error");
