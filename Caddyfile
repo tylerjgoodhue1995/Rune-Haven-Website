@@ -1,0 +1,14 @@
+{
+	admin off
+	auto_https off
+}
+
+http://localhost:8080 {
+	bind 127.0.0.1
+
+	@alpha path /api/alpha/*
+	reverse_proxy @alpha 127.0.0.1:19255
+
+	root * C:/Games/Runehaven-Website
+	file_server
+}

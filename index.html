@@ -173,6 +173,9 @@
       $("lead").textContent = maintenanceMode
         ? "The realm is under maintenance while we prepare the next journey. Verify your Solana wallet to check alpha access."
         : "The gates are open. Connect your Solana wallet to enter Rune Haven Alpha.";
+      setMessage(maintenanceMode
+        ? "Maintenance is active. Connect an approved wallet to check access."
+        : "Alpha access is open. Connect your wallet to enter.");
     } catch (error) {
       $("maintenance-state").textContent = "Status unavailable";
       setMessage(error.message, "error");
