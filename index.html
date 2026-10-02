@@ -125,7 +125,7 @@
       <p class="message" id="message" role="status" aria-live="polite">Checking the gate status…</p>
       <div class="gate-rule"></div>
       <div class="access-state"><span>World status</span><strong id="maintenance-state">Loading</strong></div>
-      <a class="download-link" id="download" href="https://github.com/tylerjgoodhue1995/Spaceship/releases" target="_blank" rel="noopener">Access granted · Get launcher</a>
+      <a class="download-link" id="download" href="https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/Rune.Haven.Setup.exe" download="Rune.Haven.Setup.exe">Access granted · Download launcher</a>
       <section class="admin" id="admin" aria-label="Alpha access administration">
         <h3>Gatekeeper settings</h3>
         <label class="toggle"><input id="maintenance-toggle" type="checkbox"><span>Maintenance mode</span></label>
@@ -141,9 +141,16 @@
   const $ = (id) => document.getElementById(id);
   const message = $("message");
   const connectButton = $("connect");
+  const downloadLink = $("download");
   const adminTokenKey = "runehaven-alpha-admin";
   let walletAddress = "";
   let maintenanceMode = true;
+
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  const macLauncher = /mac/i.test(platform);
+  const launcherFile = macLauncher ? "Rune.Haven-macos-aarch64.dmg" : "Rune.Haven.Setup.exe";
+  downloadLink.href = `https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/${launcherFile}`;
+  downloadLink.download = launcherFile;
 
   function setMessage(text, kind = "") {
     message.textContent = text;

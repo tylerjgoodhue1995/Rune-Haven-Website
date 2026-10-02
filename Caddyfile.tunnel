@@ -1,0 +1,14 @@
+{
+	admin off
+	auto_https off
+}
+
+:8081 {
+	bind 127.0.0.1
+
+	@alpha path /api/alpha/*
+	reverse_proxy @alpha 127.0.0.1:19255
+
+	root * C:/ProgramData/RuneHaven/Website
+	file_server
+}
