@@ -1,0 +1,21 @@
+[package]
+name = "rune-haven-site-api"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8", features = ["json", "tokio"] }
+bs58 = "0.5"
+ed25519-dalek = "2"
+rand = "0.9"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread", "signal", "sync", "net", "time"] }
+uuid = { version = "1.0" }
+
+[profile.release]
+opt-level = 2
+lto = false
+codegen-units = 16

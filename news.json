@@ -1,0 +1,19 @@
+{
+  "posts": [
+    {
+      "date": "2026-10-07",
+      "title": "Rune Haven website v1",
+      "body": [
+        "The alpha website now has wallet sign-in, a player dashboard, a land marketplace, a leaderboard and live server status.",
+        "Sign in with Phantom to see your characters, inventory, VGLD balance and land. Your wallet address is your in-game account."
+      ]
+    },
+    {
+      "date": "2026-10-02",
+      "title": "Invite-only alpha",
+      "body": [
+        "Alpha access is limited to approved Solana wallets. Approved players can download the launcher from the home page."
+      ]
+    }
+  ]
+}

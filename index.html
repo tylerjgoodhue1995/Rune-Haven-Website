@@ -4,266 +4,98 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#111016">
-<title>Rune Haven | Alpha Gate</title>
-<style>
-  :root {
-    color-scheme: dark;
-    --ink: #f5efe3;
-    --muted: #b7b1ab;
-    --gold: #e4bd70;
-    --teal: #59d7c5;
-    --line: rgba(236, 216, 174, .22);
-    --panel: rgba(17, 16, 22, .84);
-    font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
-    background: #111016;
-    color: var(--ink);
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background: #111016;
-  }
-  .world {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    background-image: linear-gradient(90deg, rgba(13, 12, 18, .94) 0%, rgba(13, 12, 18, .68) 48%, rgba(13, 12, 18, .18) 100%), linear-gradient(0deg, rgba(13, 12, 18, .7), transparent 55%), url("/assets/runehaven-world.jpg");
-    background-size: cover;
-    background-position: center 56%;
-    transform: scale(1.015);
-  }
-  .shell { min-height: 100vh; display: flex; flex-direction: column; }
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 22px clamp(22px, 5vw, 76px);
-    border-bottom: 1px solid rgba(240, 221, 186, .12);
-    background: rgba(12, 11, 16, .35);
-    backdrop-filter: blur(10px);
-  }
-  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
-  .brand img { width: 50px; height: 50px; object-fit: cover; border-radius: 50%; box-shadow: 0 0 24px rgba(42, 217, 204, .18); }
-  .brand-title { font-size: 20px; font-weight: 700; color: var(--gold); white-space: nowrap; }
-  .brand-subtitle, .status-chip, .eyebrow, .wallet-line, footer { font-family: system-ui, sans-serif; }
-  .brand-subtitle { margin-top: 3px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
-  .status-chip { display: inline-flex; align-items: center; gap: 8px; color: #f2d391; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #e7ae55; box-shadow: 0 0 12px rgba(231, 174, 85, .7); }
-  main { width: min(100% - 40px, 1190px); margin: auto; padding: clamp(44px, 8vh, 92px) 0; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: clamp(36px, 7vw, 94px); align-items: center; }
-  .story { max-width: 660px; animation: arrive .55s ease-out both; }
-  .eyebrow { margin: 0 0 17px; color: var(--teal); font-size: 12px; letter-spacing: .22em; text-transform: uppercase; }
-  h1 { margin: 0; color: #fff8eb; font-size: clamp(42px, 6vw, 76px); font-weight: 600; line-height: .98; }
-  .lead { max-width: 540px; margin: 24px 0 0; color: #e2d9cc; font-size: clamp(17px, 2vw, 21px); line-height: 1.55; }
-  .lore-line { max-width: 500px; margin: 32px 0 0; padding-left: 18px; border-left: 2px solid var(--gold); color: var(--muted); font-size: 14px; line-height: 1.6; }
-  .gate { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); box-shadow: 0 24px 70px rgba(0, 0, 0, .36); padding: 26px; backdrop-filter: blur(14px); animation: arrive .7s .08s ease-out both; }
-  .gate h2 { margin: 0; color: var(--gold); font-size: 24px; font-weight: 600; }
-  .gate-copy { margin: 10px 0 22px; color: var(--muted); font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.55; }
-  .wallet-line { overflow-wrap: anywhere; margin: 12px 0 0; color: #d5cbbd; font-size: 12px; }
-  .connect, .download-link, .admin-save {
-    display: inline-flex; justify-content: center; align-items: center; width: 100%; min-height: 48px;
-    border: 1px solid rgba(108, 230, 214, .5); border-radius: 5px; background: linear-gradient(110deg, #197d79, #286e7c);
-    color: #fff; font: 650 14px system-ui, sans-serif; text-decoration: none; cursor: pointer;
-    transition: filter .16s ease, transform .16s ease;
-  }
-  .connect:hover, .download-link:hover, .admin-save:hover { filter: brightness(1.12); transform: translateY(-1px); }
-  .connect:disabled { cursor: progress; opacity: .68; transform: none; }
-  .message { min-height: 44px; margin: 15px 0 0; color: #d6d0c9; font: 13px/1.5 system-ui, sans-serif; }
-  .message[data-kind="error"] { color: #ffb8a7; }
-  .message[data-kind="success"] { color: #8fe5c2; }
-  .gate-rule { height: 1px; margin: 20px 0; background: var(--line); }
-  .access-state { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font: 12px system-ui, sans-serif; }
-  .access-state strong { color: var(--ink); font-weight: 600; }
-  .download-link { display: none; margin-top: 15px; background: linear-gradient(110deg, #8a6024, #715129); border-color: rgba(228,189,112,.55); }
-  .admin { display: none; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
-  .admin h3 { margin: 0 0 12px; color: var(--gold); font-size: 17px; }
-  .toggle { display: flex; align-items: center; gap: 10px; margin: 10px 0 14px; color: var(--ink); font: 13px system-ui, sans-serif; }
-  .toggle input { width: 17px; height: 17px; accent-color: var(--teal); }
-  label.wallets { display: block; margin-bottom: 7px; color: var(--muted); font: 11px system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
-  textarea { display: block; width: 100%; min-height: 110px; resize: vertical; padding: 10px; border: 1px solid rgba(236,216,174,.24); border-radius: 4px; background: rgba(6,8,13,.65); color: var(--ink); font: 12px/1.5 ui-monospace, monospace; }
-  .admin-save { min-height: 38px; margin-top: 10px; background: #4e493b; border-color: rgba(228,189,112,.45); }
-  footer { display: flex; justify-content: space-between; gap: 16px; padding: 16px clamp(22px, 5vw, 76px); border-top: 1px solid rgba(240, 221, 186, .12); color: rgba(226,217,204,.72); font-size: 11px; }
-  footer a { color: var(--gold); text-decoration: none; }
-  @keyframes arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  @media (max-width: 760px) {
-    .world { background-position: 57% center; }
-    header { padding: 16px 20px; }
-    .brand img { width: 42px; height: 42px; }
-    .brand-title { font-size: 17px; }
-    .status-chip { font-size: 10px; }
-    main { width: min(100% - 32px, 560px); grid-template-columns: 1fr; gap: 28px; padding: 46px 0; }
-    h1 { font-size: clamp(42px, 11vw, 60px); }
-    .gate { padding: 21px; }
-    footer { padding: 14px 20px; flex-wrap: wrap; }
-  }
-  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
-</style>
+<title>Rune Haven | Alpha</title>
+<link rel="stylesheet" href="/site.css">
 </head>
 <body>
 <div class="world" aria-hidden="true"></div>
 <div class="shell">
-  <header>
-    <div class="brand">
-      <img src="/assets/rune-haven-logo.png" alt="">
-      <div><div class="brand-title">Rune Haven</div><div class="brand-subtitle">A fantasy world in progress</div></div>
-    </div>
-    <div class="status-chip"><span class="status-dot"></span><span id="status-chip">Alpha access</span></div>
-  </header>
-  <main>
-    <section class="story" aria-labelledby="title">
-      <p class="eyebrow">Private alpha access</p>
-      <h1 id="title">Rune Haven<br>Alpha</h1>
-      <p class="lead" id="lead">Rune Haven Alpha is invite-only. Verify your Solana wallet to check access.</p>
-      <p class="lore-line">Your Solana wallet address identifies your alpha access. A one-time signature proves ownership; your private key never leaves your wallet.</p>
+  <header class="top" id="top"></header>
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Private alpha</p>
+        <h1>Rune Haven<br>Alpha</h1>
+        <p class="lead" id="lead">Rune Haven Alpha is invite-only. Sign in with your Solana wallet to check access.</p>
+        <p class="muted" style="max-width:500px;margin-top:28px;padding-left:18px;border-left:2px solid var(--gold)">Your wallet address is your alpha ID and your in-game account. A one-time signature proves ownership; your private key never leaves your wallet.</p>
+      </div>
+      <div class="card" id="access-card">
+        <h2>Enter the realm</h2>
+        <div id="access-body"></div>
+        <p class="msg" id="msg" role="status" aria-live="polite"></p>
+      </div>
     </section>
-    <section class="gate" aria-labelledby="gate-title">
-      <h2 id="gate-title">Enter the realm</h2>
-      <p class="gate-copy">Connect Phantom to check whether your wallet is approved for the alpha.</p>
-      <button class="connect" id="connect">Connect Phantom</button>
-      <p class="wallet-line" id="wallet-line"></p>
-      <p class="message" id="message" role="status" aria-live="polite">Checking alpha access…</p>
-      <div class="gate-rule"></div>
-      <div class="access-state"><span>Access</span><strong id="alpha-state">Loading</strong></div>
-      <a class="download-link" id="download" href="https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/Rune.Haven.Setup.exe" download="Rune.Haven.Setup.exe">Access granted · Download launcher</a>
-      <section class="admin" id="admin" aria-label="Alpha access administration">
-        <h3>Alpha access controls</h3>
-        <p class="gate-copy">Only the configured admin wallet can view or edit these addresses.</p>
-        <label class="toggle"><input id="alpha-open-toggle" type="checkbox"><span>Open alpha to all wallets</span></label>
-        <label class="wallets" for="allowlist">Approved Solana wallet addresses</label>
-        <textarea id="allowlist" spellcheck="false" placeholder="One wallet address per line"></textarea>
-        <button class="admin-save" id="save">Save alpha access</button>
-      </section>
+    <section class="grid">
+      <div class="card">
+        <h2>Server status</h2>
+        <div class="stat"><span>Game server</span><strong id="st-online">Checking…</strong></div>
+        <div class="stat"><span>Version</span><strong id="st-version">—</strong></div>
+        <div class="stat"><span>Alpha access</span><strong id="st-alpha">—</strong></div>
+      </div>
+      <div class="card">
+        <h2>Leaderboard</h2>
+        <table aria-label="Top players by General XP">
+          <thead><tr><th>#</th><th>Character</th><th class="num">General XP</th></tr></thead>
+          <tbody id="board"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
     </section>
   </main>
-  <footer><span>Rune Haven Alpha · Solana</span><a href="https://github.com/tylerjgoodhue1995/Rune-Haven/releases" target="_blank" rel="noopener">Game updates</a></footer>
+  <footer class="bottom" id="bottom"></footer>
 </div>
+<script src="/site.js"></script>
 <script>
-  const $ = (id) => document.getElementById(id);
-  const message = $("message");
-  const connectButton = $("connect");
-  const downloadLink = $("download");
-  const adminTokenKey = "runehaven-alpha-admin";
-  let walletAddress = "";
-  let alphaOpen = false;
+  const { $, esc, api, session, shell, signIn, setMsg } = RH;
+  shell("/");
 
   const platform = navigator.userAgentData?.platform || navigator.platform || "";
-  const macLauncher = /mac/i.test(platform);
-  const launcherFile = macLauncher ? "Rune.Haven-macos-aarch64.dmg" : "Rune.Haven.Setup.exe";
-  downloadLink.href = `https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/${launcherFile}`;
-  downloadLink.download = launcherFile;
+  const launcher = /mac/i.test(platform) ? "Rune.Haven-macos-aarch64.dmg" : "Rune.Haven.Setup.exe";
+  const launcherUrl = `https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/${launcher}`;
 
-  function setMessage(text, kind = "") {
-    message.textContent = text;
-    message.dataset.kind = kind;
-  }
-
-  async function api(path, body, token, method = body ? "POST" : "GET") {
-    const headers = { "content-type": "application/json" };
-    if (token) headers.authorization = `Bearer ${token}`;
-    const response = await fetch(path, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      cache: "no-store"
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
-    return data;
+  function renderAccess() {
+    const s = session();
+    const body = $("#access-body");
+    if (!s) {
+      body.innerHTML = '<p class="muted">Connect Phantom to check whether your wallet is approved for the alpha.</p><button class="btn block" id="connect" type="button">Connect Phantom</button>';
+      $("#connect").addEventListener("click", async (event) => {
+        event.target.disabled = true;
+        setMsg($("#msg"), "Approve the sign-in request in Phantom…");
+        try { await signIn(); location.reload(); } catch (error) { setMsg($("#msg"), error.message, "error"); event.target.disabled = false; }
+      });
+    } else if (s.alpha_access) {
+      body.innerHTML = `<p class="muted">Signed in as <code>${esc(RH.short(s.wallet))}</code>. You are approved for the alpha.</p><a class="btn gold block" href="${launcherUrl}" download="${launcher}">Download launcher</a><a class="btn quiet block" style="margin-top:10px" href="/dashboard.html">Open dashboard</a>`;
+      setMsg($("#msg"), "Wallet verified. Alpha access granted.", "ok");
+    } else {
+      body.innerHTML = `<p class="muted">Signed in as <code>${esc(RH.short(s.wallet))}</code>.</p>`;
+      setMsg($("#msg"), "This wallet is not on the alpha access list.", "error");
+    }
   }
 
   async function loadStatus() {
     try {
-      const state = await api("/api/alpha/status");
-      alphaOpen = state.alpha_open;
-      $("alpha-state").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
-      $("status-chip").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
-      $("lead").textContent = alphaOpen
+      const s = await api("/api/v1/status", { auth: false });
+      $("#st-online").innerHTML = `<span class="dot ${s.online ? "on" : "off"}"></span>${s.online ? "Online" : "Offline"}`;
+      $("#st-version").textContent = s.version;
+      $("#st-alpha").textContent = s.alpha_open ? "Open alpha" : "Invite-only";
+      $("#lead").textContent = s.alpha_open
         ? "Alpha access is open. Connect your Solana wallet to enter Rune Haven."
-        : "Rune Haven Alpha is invite-only. Verify your Solana wallet to check access.";
-      setMessage(alphaOpen
-        ? "Alpha access is open. Connect your wallet to enter."
-        : "Invite-only alpha. Connect an approved wallet to check access.");
-    } catch (error) {
-      $("alpha-state").textContent = "Status unavailable";
-      setMessage(error.message, "error");
-    }
+        : "Rune Haven Alpha is invite-only. Sign in with your Solana wallet to check access.";
+    } catch { $("#st-online").textContent = "Unavailable"; }
   }
 
-  function encodeBase58(bytes) {
-    const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-    let value = 0n;
-    for (const byte of bytes) value = (value << 8n) | BigInt(byte);
-    let result = "";
-    while (value > 0n) {
-      const remainder = Number(value % 58n);
-      result = alphabet[remainder] + result;
-      value /= 58n;
-    }
-    let leadingZeroes = 0;
-    while (leadingZeroes < bytes.length && bytes[leadingZeroes] === 0) leadingZeroes++;
-    return "1".repeat(leadingZeroes) + (result || (leadingZeroes ? "" : "1"));
-  }
-
-  async function connectWallet() {
-    const provider = window.phantom?.solana || window.solana;
-    if (!provider?.isPhantom) throw new Error("Phantom was not detected. Install the wallet extension and reload this page.");
-    const connected = await provider.connect({ onlyIfTrusted: false });
-    walletAddress = connected.publicKey.toString();
-    $("wallet-line").textContent = `Connected: ${walletAddress}`;
-    setMessage("Requesting a one-time access challenge…");
-    const challenge = await api("/api/alpha/challenge", { wallet: walletAddress });
-    setMessage("Approve the Rune Haven signature request in Phantom.");
-    const signed = await provider.signMessage(new TextEncoder().encode(challenge.message), "utf8");
-    const signature = encodeBase58(signed.signature);
-    const result = await api("/api/alpha/verify", { wallet: walletAddress, nonce: challenge.nonce, signature });
-    setMessage(result.message, result.access_granted ? "success" : "error");
-    $("download").style.display = result.access_granted ? "inline-flex" : "none";
-    if (result.is_admin && result.admin_session) {
-      sessionStorage.setItem(adminTokenKey, result.admin_session);
-      await loadAdmin(result.admin_session);
-    }
-  }
-
-  async function loadAdmin(token) {
-    const state = await api("/api/alpha/admin/state", null, token);
-    $("admin").style.display = "block";
-    $("alpha-open-toggle").checked = state.alpha_open;
-    $("allowlist").value = state.allowed_wallets.join("\n");
-  }
-
-  connectButton.addEventListener("click", async () => {
-    connectButton.disabled = true;
-    connectButton.textContent = "Waiting for Phantom…";
+  async function loadBoard() {
+    const body = $("#board");
     try {
-      await connectWallet();
-    } catch (error) {
-      setMessage(error.message || "Wallet verification failed.", "error");
-    } finally {
-      connectButton.disabled = false;
-      connectButton.textContent = "Connect Phantom";
-    }
-  });
+      const { players } = await api("/api/v1/leaderboard", { auth: false });
+      body.innerHTML = players.length
+        ? players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td class="num">${Number(p.general_xp).toLocaleString()}</td></tr>`).join("")
+        : '<tr><td colspan="3" class="muted">No characters yet.</td></tr>';
+    } catch { body.innerHTML = '<tr><td colspan="3" class="muted">Leaderboard unavailable.</td></tr>'; }
+  }
 
-  $("save").addEventListener("click", async () => {
-    const token = sessionStorage.getItem(adminTokenKey);
-    if (!token) return setMessage("Reconnect with the admin wallet to manage access.", "error");
-    const allowed_wallets = $("allowlist").value.split(/\r?\n/).map((wallet) => wallet.trim()).filter(Boolean);
-    try {
-      await api("/api/alpha/admin/state", {
-        alpha_open: $("alpha-open-toggle").checked,
-        allowed_wallets
-      }, token, "PUT");
-      alphaOpen = $("alpha-open-toggle").checked;
-      $("alpha-state").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
-      $("status-chip").textContent = alphaOpen ? "Open alpha" : "Invite-only alpha";
-      setMessage("Access settings saved.", "success");
-    } catch (error) {
-      setMessage(error.message || "Could not save access settings.", "error");
-    }
-  });
-
+  renderAccess();
   loadStatus();
+  loadBoard();
 </script>
 </body>
 </html>

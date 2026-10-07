@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111016">
+<title>News | Rune Haven</title>
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<div class="world" aria-hidden="true"></div>
+<div class="shell">
+  <header class="top" id="top"></header>
+  <main class="wrap">
+    <p class="eyebrow">News</p>
+    <h1>Patch notes</h1>
+    <div class="card news" id="news" style="margin-top:26px"><p class="muted">Loading…</p></div>
+  </main>
+  <footer class="bottom" id="bottom"></footer>
+</div>
+<script src="/site.js"></script>
+<script>
+  const { $, esc, shell } = RH;
+  shell("/news.html");
+  fetch("/news.json", { cache: "no-store" })
+    .then((response) => response.json())
+    .then(({ posts }) => {
+      $("#news").innerHTML = posts
+        .map((post) => `<article><time datetime="${esc(post.date)}">${esc(post.date)}</time><h3>${esc(post.title)}</h3>${post.body.map((line) => `<p>${esc(line)}</p>`).join("")}</article>`)
+        .join("");
+    })
+    .catch(() => { $("#news").innerHTML = '<p class="muted">News is unavailable right now.</p>'; });
+</script>
+</body>
+</html>

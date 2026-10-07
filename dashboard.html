@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111016">
+<title>Dashboard | Rune Haven</title>
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<div class="world" aria-hidden="true"></div>
+<div class="shell">
+  <header class="top" id="top"></header>
+  <main class="wrap">
+    <p class="eyebrow">Player dashboard</p>
+    <h1>Your realm</h1>
+    <div class="card gate" style="margin-top:26px;max-width:520px">
+      <h2>Sign in required</h2>
+      <p class="muted">Connect Phantom to see your characters, balances and land.</p>
+      <button class="btn block" id="gate-signin" type="button">Connect Phantom</button>
+    </div>
+    <div class="app">
+      <p class="msg" id="msg" role="status"></p>
+      <section class="grid">
+        <div class="card">
+          <h2>Account</h2>
+          <div class="stat"><span>Wallet</span><strong id="a-wallet">—</strong></div>
+          <div class="stat"><span>Game account ID</span><strong id="a-uuid">—</strong></div>
+          <div class="stat"><span>Alpha access</span><strong id="a-alpha">—</strong></div>
+        </div>
+        <div class="card">
+          <h2>Balances</h2>
+          <div class="stat"><span>VGLD</span><strong id="b-vgld">—</strong></div>
+          <div class="stat"><span>SOL</span><strong id="b-sol">—</strong></div>
+        </div>
+        <div class="card">
+          <h2>Characters</h2>
+          <div class="list" id="chars"><p class="muted">Loading…</p></div>
+        </div>
+        <div class="card">
+          <h2 id="inv-title">Inventory</h2>
+          <div id="inv"><p class="muted">Select a character to view their items.</p></div>
+        </div>
+        <div class="card wide">
+          <h2>Land</h2>
+          <div class="list" id="land"><p class="muted">Loading…</p></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="bottom" id="bottom"></footer>
+</div>
+<script src="/site.js"></script>
+<script>
+  const { $, esc, api, session, shell, guard, signIn, setMsg, fmtUnits, prettyItem } = RH;
+  shell("/dashboard.html");
+  $("#gate-signin").addEventListener("click", async (event) => {
+    event.target.disabled = true;
+    try { await signIn(); location.reload(); } catch (error) { RH.toast(error.message); event.target.disabled = false; }
+  });
+
+  async function section(load, onError) {
+    try { return await load(); } catch (error) { onError(error); return null; }
+  }
+
+  async function showInventory(character) {
+    $("#inv-title").textContent = `${character.name}'s items`;
+    const box = $("#inv");
+    box.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const { items } = await api(`/api/v1/me/characters/${character.id}/inventory`);
+      if (!items.length) { box.innerHTML = '<p class="muted">No items.</p>'; return; }
+      box.innerHTML = `<table><thead><tr><th>Item</th><th>Where</th><th class="num">Qty</th></tr></thead><tbody>${items
+        .map((i) => `<tr><td title="${esc(i.id)}">${esc(prettyItem(i.id))}</td><td>${i.container === "equipped" ? "Equipped" : "Bag"}</td><td class="num">${i.count}</td></tr>`)
+        .join("")}</tbody></table>`;
+    } catch (error) { box.innerHTML = `<p class="muted">${esc(error.message)}</p>`; }
+  }
+
+  async function init() {
+    if (!guard()) return;
+    const me = await section(() => api("/api/v1/me"), (e) => setMsg($("#msg"), e.message, "error"));
+    if (!me) { if (!session()) location.reload(); return; }
+    $("#a-wallet").textContent = me.wallet;
+    $("#a-uuid").textContent = me.game_account;
+    $("#a-alpha").textContent = me.alpha_access ? "Approved" : "Not approved";
+    if (!me.alpha_access) { setMsg($("#msg"), "This wallet is not approved for the alpha yet.", "error"); return; }
+
+    const [chars, balance, land] = await Promise.all([
+      section(() => api("/api/v1/me/characters"), (e) => { $("#chars").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }),
+      section(() => api("/api/v1/me/balance"), () => { $("#b-vgld").textContent = "Unavailable"; $("#b-sol").textContent = "Unavailable"; }),
+      section(() => api("/api/v1/me/land"), (e) => { $("#land").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }),
+    ]);
+
+    if (chars) {
+      const box = $("#chars");
+      box.innerHTML = chars.characters.length ? "" : '<p class="muted">No characters yet. Log in to the game with this wallet to create one.</p>';
+      for (const character of chars.characters) {
+        const row = document.createElement("div");
+        row.className = "row";
+        row.innerHTML = `<span><strong>${esc(character.name)}</strong><br><span class="muted">General XP ${character.general_xp == null ? "—" : Number(character.general_xp).toLocaleString()}</span></span>`;
+        const button = document.createElement("button");
+        button.className = "btn quiet";
+        button.type = "button";
+        button.textContent = "Inventory";
+        button.addEventListener("click", () => showInventory(character));
+        row.appendChild(button);
+        box.appendChild(row);
+      }
+    }
+    if (balance) {
+      $("#b-sol").textContent = (balance.sol_lamports / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+      $("#b-vgld").textContent = balance.vgld ? fmtUnits(balance.vgld.base_units, balance.vgld.decimals) : "Not configured";
+    }
+    if (land) {
+      $("#land").innerHTML = land.parcels.length
+        ? land.parcels.map((p) => `<div class="row"><span><strong>${esc(p.id)}</strong><br><span class="muted">${esc(p.region)} · ${esc(p.land_type)} · ${esc(p.terrain_type)}</span></span><span class="tag">${esc(p.rarity)}</span></div>`).join("")
+        : '<p class="muted">You do not own any land NFTs yet. Browse the marketplace to find a parcel.</p>';
+    }
+  }
+  init();
+</script>
+</body>
+</html>

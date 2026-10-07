@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111016">
+<title>Marketplace | Rune Haven</title>
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<div class="world" aria-hidden="true"></div>
+<div class="shell">
+  <header class="top" id="top"></header>
+  <main class="wrap">
+    <p class="eyebrow">Marketplace</p>
+    <h1>Land listings</h1>
+    <p class="lead">Buy land NFTs straight from the realm. Purchases are signed in your wallet and settle on Solana <span class="tag">Devnet</span></p>
+    <div class="card gate" style="margin-top:26px;max-width:520px">
+      <h2>Sign in required</h2>
+      <p class="muted">Connect Phantom to view and buy listings.</p>
+      <button class="btn block" id="gate-signin" type="button">Connect Phantom</button>
+    </div>
+    <div class="app">
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+      <div class="card" style="margin-top:18px">
+        <div class="list" id="listings"><p class="muted">Loading…</p></div>
+      </div>
+    </div>
+  </main>
+  <footer class="bottom" id="bottom"></footer>
+</div>
+<script src="/site.js"></script>
+<script>
+  const { $, esc, api, shell, guard, signIn, setMsg, short, b58, provider } = RH;
+  shell("/market.html");
+  $("#gate-signin").addEventListener("click", async (event) => {
+    event.target.disabled = true;
+    try { await signIn(); location.reload(); } catch (error) { RH.toast(error.message); event.target.disabled = false; }
+  });
+
+  const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
+  async function buy(listing, button) {
+    const msg = $("#msg");
+    button.disabled = true;
+    try {
+      const phantom = provider();
+      if (!phantom?.isPhantom) throw new Error("Phantom was not detected.");
+      await phantom.connect();
+      setMsg(msg, "Preparing your purchase…");
+      const prepared = await api(`/api/v1/market/${encodeURIComponent(listing.parcel_id)}/purchase`, { method: "POST", body: {} });
+      setMsg(msg, "Approve the transaction in Phantom…");
+      const { signature } = await phantom.request({
+        method: "signAndSendTransaction",
+        params: { message: b58(fromBase64(prepared.partially_signed_transaction)) },
+      });
+      setMsg(msg, "Confirming on Solana…");
+      const result = await api(`/api/v1/market/${encodeURIComponent(listing.parcel_id)}/confirm`, { method: "POST", body: { signature } });
+      setMsg(msg, result.message || (result.verified ? "Purchase complete." : "Purchase not verified yet."), result.verified ? "ok" : "error");
+      if (result.verified) load();
+    } catch (error) {
+      setMsg(msg, error.message || "Purchase cancelled.", "error");
+    } finally { button.disabled = false; }
+  }
+
+  async function load() {
+    const box = $("#listings");
+    try {
+      const { listings } = await api("/api/v1/market/listings");
+      if (!listings.length) { box.innerHTML = '<p class="muted">No listings right now.</p>'; return; }
+      box.innerHTML = "";
+      for (const listing of listings) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const price = (listing.price_lamports / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+        row.innerHTML = `<span><strong>${esc(listing.parcel_id)}</strong><br><span class="muted">Mint ${esc(short(listing.mint))} · Seller ${esc(short(listing.seller))}</span></span><span><strong>${price} SOL</strong> </span>`;
+        const button = document.createElement("button");
+        button.className = "btn gold";
+        button.type = "button";
+        button.textContent = "Buy";
+        button.addEventListener("click", () => buy(listing, button));
+        row.lastElementChild.appendChild(button);
+        box.appendChild(row);
+      }
+    } catch (error) { box.innerHTML = `<p class="muted">${esc(error.message)}</p>`; }
+  }
+
+  if (guard()) load();
+</script>
+</body>
+</html>

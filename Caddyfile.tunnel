@@ -9,6 +9,9 @@
 	@alpha path /api/alpha/*
 	reverse_proxy @alpha 127.0.0.1:19255
 
+	@api path /api/v1/*
+	reverse_proxy @api 127.0.0.1:19260
+
 	root * C:/ProgramData/RuneHaven/Website
 	file_server
 }

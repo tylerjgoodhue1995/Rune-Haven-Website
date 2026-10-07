@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#111016">
+<title>Admin | Rune Haven</title>
+<link rel="stylesheet" href="/site.css">
+</head>
+<body>
+<div class="world" aria-hidden="true"></div>
+<div class="shell">
+  <header class="top" id="top"></header>
+  <main class="wrap">
+    <p class="eyebrow">Admin</p>
+    <h1>Alpha access</h1>
+    <div class="card" style="margin-top:26px;max-width:640px">
+      <div id="signin-box">
+        <p class="muted">Only the configured admin wallet can view or edit approved addresses.</p>
+        <button class="btn block" id="admin-signin" type="button">Admin sign-in</button>
+      </div>
+      <div id="panel" hidden>
+        <label class="toggle"><input id="alpha-open" type="checkbox"><span>Open alpha to all wallets</span></label>
+        <label class="field" for="wallets">Approved Solana wallet addresses</label>
+        <textarea id="wallets" spellcheck="false" placeholder="One wallet address per line"></textarea>
+        <button class="btn block" id="save" type="button" style="margin-top:12px">Save alpha access</button>
+      </div>
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+    </div>
+  </main>
+  <footer class="bottom" id="bottom"></footer>
+</div>
+<script src="/site.js"></script>
+<script>
+  const { $, shell, setMsg, b58, provider } = RH;
+  shell("/admin.html");
+  let token = "";
+
+  async function adminApi(path, method, body) {
+    const response = await fetch(path, {
+      method,
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
+    return data;
+  }
+
+  async function post(path, body) {
+    const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
+    return data;
+  }
+
+  $("#admin-signin").addEventListener("click", async (event) => {
+    const msg = $("#msg");
+    event.target.disabled = true;
+    try {
+      const phantom = provider();
+      if (!phantom?.isPhantom) throw new Error("Phantom was not detected.");
+      const { publicKey } = await phantom.connect();
+      const wallet = publicKey.toString();
+      const challenge = await post("/api/alpha/challenge", { wallet });
+      const signed = await phantom.signMessage(new TextEncoder().encode(challenge.message), "utf8");
+      const result = await post("/api/alpha/verify", { wallet, nonce: challenge.nonce, signature: b58(signed.signature) });
+      if (!result.is_admin || !result.admin_session) throw new Error("This wallet is not an admin.");
+      token = result.admin_session;
+      const state = await adminApi("/api/alpha/admin/state", "GET");
+      $("#alpha-open").checked = state.alpha_open;
+      $("#wallets").value = state.allowed_wallets.join("\n");
+      $("#signin-box").hidden = true;
+      $("#panel").hidden = false;
+      setMsg(msg, "");
+    } catch (error) { setMsg(msg, error.message, "error"); event.target.disabled = false; }
+  });
+
+  $("#save").addEventListener("click", async () => {
+    const wallets = $("#wallets").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    try {
+      await adminApi("/api/alpha/admin/state", "PUT", { alpha_open: $("#alpha-open").checked, allowed_wallets: wallets });
+      setMsg($("#msg"), "Alpha access saved.", "ok");
+    } catch (error) { setMsg($("#msg"), error.message, "error"); }
+  });
+</script>
+</body>
+</html>
