@@ -127,7 +127,7 @@ fn save_members(path: &FsPath, members: &BTreeMap<String, Member>) -> Result<(),
     write_atomic(path, &serde_json::to_vec_pretty(&json!({ "wallets": wallets })).map_err(|_| internal("Could not save notes."))?)
 }
 
-fn audit(state: &AppState, admin: &str, action: &str, detail: Value) {
+pub fn audit(state: &AppState, admin: &str, action: &str, detail: Value) {
     let line = json!({ "at": now_ms() as u64, "admin": admin, "action": action, "detail": detail }).to_string();
     let result = fs::OpenOptions::new()
         .create(true)
@@ -145,7 +145,7 @@ fn read_audit(path: &FsPath, limit: usize) -> Vec<Value> {
         .unwrap_or_default()
 }
 
-fn admin_session(headers: &HeaderMap, state: &AppState) -> Result<Session, ApiError> {
+pub fn admin_session(headers: &HeaderMap, state: &AppState) -> Result<Session, ApiError> {
     rate_limit(state)?;
     let session = authed(headers, state)?;
     if !state.cfg.admin_wallets.contains(&session.wallet) {

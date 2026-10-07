@@ -13,25 +13,32 @@
   <header class="top" id="top"></header>
   <main class="wrap">
     <p class="eyebrow">Marketplace</p>
-    <h1>Land listings</h1>
-    <p class="lead">Buy land NFTs straight from the realm. Purchases are signed in your wallet and settle on Solana <span class="tag">Devnet</span></p>
+    <h1>Trade land, gear and heroes</h1>
+    <p class="lead">Every listing is an NFT. You pay in VGLD and the asset moves to your wallet in one transaction signed in Phantom <span class="tag">Devnet</span></p>
     <div class="card gate" style="margin-top:26px;max-width:520px">
       <h2>Sign in required</h2>
-      <p class="muted">Connect Phantom to view and buy listings.</p>
+      <p class="muted">Connect Phantom to view and trade listings.</p>
       <button class="btn block" id="gate-signin" type="button">Connect Phantom</button>
     </div>
     <div class="app">
+      <div class="tabs" role="tablist" aria-label="Marketplace">
+        <button role="tab" aria-selected="true" data-tab="land" type="button">Land</button>
+        <button role="tab" aria-selected="false" data-tab="item" type="button">Items</button>
+        <button role="tab" aria-selected="false" data-tab="character" type="button">Characters</button>
+        <button role="tab" aria-selected="false" data-tab="mine" type="button">Sell</button>
+      </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
       <div class="card" style="margin-top:18px">
-        <div class="list" id="listings"><p class="muted">Loadingâ€¦</p></div>
+        <div class="list" id="listings"><p class="muted">Loading…</p></div>
       </div>
+      <p class="muted" id="fee" style="margin-top:14px"></p>
     </div>
   </main>
   <footer class="bottom" id="bottom"></footer>
 </div>
 <script src="/site.js?v=20261007a"></script>
 <script>
-  const { $, esc, api, shell, guard, signIn, setMsg, short, b58, provider } = RH;
+  const { $, esc, api, shell, guard, signIn, setMsg, short, b58, provider, fmtUnits } = RH;
   shell("/market.html");
   $("#gate-signin").addEventListener("click", async (event) => {
     event.target.disabled = true;
@@ -39,50 +46,142 @@
   });
 
   const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+  const msg = $("#msg");
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let tab = "land";
+  let token = null;
+  let feeBps = 0;
 
-  async function buy(listing, button) {
-    const msg = $("#msg");
+  function toUnits(text, decimals) {
+    const match = /^(\d+)(?:\.(\d+))?$/.exec(text.trim());
+    if (!match || (match[2] || "").length > decimals) throw new Error(`Enter a price with at most ${decimals} decimals.`);
+    const units = BigInt(match[1] + (match[2] || "").padEnd(decimals, "0"));
+    if (units <= 0n) throw new Error("Enter a price above zero.");
+    return units.toString();
+  }
+
+  async function sign(base64Tx) {
+    const phantom = provider();
+    if (!phantom?.isPhantom) throw new Error("Phantom was not detected.");
+    await phantom.connect();
+    const { signature } = await phantom.request({ method: "signAndSendTransaction", params: { message: b58(fromBase64(base64Tx)) } });
+    return signature;
+  }
+
+  async function run(button, job) {
     button.disabled = true;
+    try { await job(); } catch (error) { setMsg(msg, error.message || "Cancelled.", "error"); } finally { button.disabled = false; }
+  }
+
+  const buy = (listing, button) => run(button, async () => {
+    setMsg(msg, "Preparing your purchase…");
+    const prepared = await api(`/api/v1/market/listings/${listing.id}/purchase`, { method: "POST", body: {} });
+    setMsg(msg, "Approve the transaction in Phantom…");
+    const signature = await sign(prepared.transaction);
+    setMsg(msg, "Confirming on Solana…");
+    const result = await api(`/api/v1/market/listings/${listing.id}/confirm`, { method: "POST", body: { signature } });
+    setMsg(msg, result.message, result.verified ? "ok" : "error");
+    if (result.verified) load();
+  });
+
+  const sell = (asset, input, button) => run(button, async () => {
+    if (!token) throw new Error("VGLD is not configured yet.");
+    const price = toUnits(input.value, token.decimals);
+    if (!asset.approved) {
+      setMsg(msg, "Approve the marketplace for this asset in Phantom…");
+      const prepared = await api("/api/v1/market/approve", { method: "POST", body: { mint: asset.mint } });
+      await sign(prepared.transaction);
+    }
+    setMsg(msg, "Creating your listing…");
+    for (let attempt = 0; ; attempt++) {
+      try { await api("/api/v1/market/listings", { method: "POST", body: { mint: asset.mint, price } }); break; }
+      catch (error) { if (attempt >= 12 || !/Approve the marketplace/.test(error.message)) throw error; await sleep(2000); }
+    }
+    setMsg(msg, "Listed.", "ok");
+    load();
+  });
+
+  const unlist = (listing, button) => run(button, async () => {
+    await api(`/api/v1/market/listings/${listing.id}`, { method: "DELETE" });
+    setMsg(msg, "Listing cancelled. Remove the marketplace approval to leave nothing open.", "ok");
     try {
-      const phantom = provider();
-      if (!phantom?.isPhantom) throw new Error("Phantom was not detected.");
-      await phantom.connect();
-      setMsg(msg, "Preparing your purchaseâ€¦");
-      const prepared = await api(`/api/v1/market/${encodeURIComponent(listing.parcel_id)}/purchase`, { method: "POST", body: {} });
-      setMsg(msg, "Approve the transaction in Phantomâ€¦");
-      const { signature } = await phantom.request({
-        method: "signAndSendTransaction",
-        params: { message: b58(fromBase64(prepared.partially_signed_transaction)) },
-      });
-      setMsg(msg, "Confirming on Solanaâ€¦");
-      const result = await api(`/api/v1/market/${encodeURIComponent(listing.parcel_id)}/confirm`, { method: "POST", body: { signature } });
-      setMsg(msg, result.message || (result.verified ? "Purchase complete." : "Purchase not verified yet."), result.verified ? "ok" : "error");
-      if (result.verified) load();
-    } catch (error) {
-      setMsg(msg, error.message || "Purchase cancelled.", "error");
-    } finally { button.disabled = false; }
+      const prepared = await api(`/api/v1/market/listings/${listing.id}/revoke`, { method: "POST", body: {} });
+      await sign(prepared.transaction);
+      setMsg(msg, "Listing cancelled and approval removed.", "ok");
+    } catch { /* approval can be removed later */ }
+    load();
+  });
+
+  const price = (units) => token ? `${fmtUnits(units, token.decimals)} VGLD` : `${units} units`;
+
+  function button(label, cls, handler) {
+    const node = document.createElement("button");
+    node.className = `btn ${cls} small`;
+    node.type = "button";
+    node.textContent = label;
+    node.addEventListener("click", () => handler(node));
+    return node;
   }
 
   async function load() {
     const box = $("#listings");
+    const me = RH.session()?.wallet;
     try {
-      const { listings } = await api("/api/v1/market/listings");
-      if (!listings.length) { box.innerHTML = '<p class="muted">No listings right now.</p>'; return; }
+      if (tab === "mine") {
+        const [{ assets }, data] = await Promise.all([api("/api/v1/market/owned"), api("/api/v1/market/listings")]);
+        token = data.vgld;
+        const mine = data.listings.filter((l) => l.seller === me);
+        box.innerHTML = "";
+        for (const listing of mine) {
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `<span><strong>${esc(listing.name)}</strong><br><span class="muted">${esc(listing.kind)} · listed at ${esc(price(listing.price))}</span></span>`;
+          row.appendChild(button("Cancel", "quiet", (node) => unlist(listing, node)));
+          box.appendChild(row);
+        }
+        for (const asset of assets.filter((a) => !a.listed)) {
+          const row = document.createElement("div");
+          row.className = "row";
+          row.innerHTML = `<span><strong>${esc(asset.name)}</strong><br><span class="muted">${esc(asset.kind)} · ${esc(short(asset.mint))}${asset.approved ? " · approved" : ""}</span></span>`;
+          const form = document.createElement("span");
+          const input = document.createElement("input");
+          input.className = "text";input.placeholder = "Price in VGLD";
+          input.inputMode = "decimal";
+          input.setAttribute("aria-label", `Price for ${asset.name}`);
+          input.style.cssText = "width:130px;margin-right:8px";
+          form.append(input, button("List", "gold", (node) => sell(asset, input, node)));
+          row.appendChild(form);
+          box.appendChild(row);
+        }
+        if (!box.children.length) box.innerHTML = '<p class="muted">You hold no tradeable assets yet.</p>';
+        return;
+      }
+      const data = await api(`/api/v1/market/listings?kind=${tab}`);
+      token = data.vgld;
+      feeBps = data.fee_bps;
+      $("#fee").textContent = `Platform fee ${(feeBps / 100).toFixed(2)}% is taken from the seller's proceeds.`;
+      if (!data.listings.length) { box.innerHTML = '<p class="muted">No listings in this category yet.</p>'; return; }
       box.innerHTML = "";
-      for (const listing of listings) {
+      for (const listing of data.listings) {
         const row = document.createElement("div");
         row.className = "row";
-        const price = (listing.price_lamports / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
-        row.innerHTML = `<span><strong>${esc(listing.parcel_id)}</strong><br><span class="muted">Mint ${esc(short(listing.mint))} Â· Seller ${esc(short(listing.seller))}</span></span><span><strong>${price} SOL</strong> </span>`;
-        const button = document.createElement("button");
-        button.className = "btn gold";
-        button.type = "button";
-        button.textContent = "Buy";
-        button.addEventListener("click", () => buy(listing, button));
-        row.lastElementChild.appendChild(button);
+        row.innerHTML = `<span><strong>${esc(listing.name)}</strong><br><span class="muted">${esc(listing.reference)} · Seller ${esc(short(listing.seller))}</span></span>`;
+        const side = document.createElement("span");
+        side.innerHTML = `<strong>${esc(price(listing.price))}</strong> `;
+        side.appendChild(listing.seller === me ? button("Yours", "quiet", () => {}) : button("Buy", "gold", (node) => buy(listing, node)));
+        row.appendChild(side);
         box.appendChild(row);
       }
     } catch (error) { box.innerHTML = `<p class="muted">${esc(error.message)}</p>`; }
+  }
+
+  for (const node of document.querySelectorAll(".tabs button")) {
+    node.addEventListener("click", () => {
+      document.querySelectorAll(".tabs button").forEach((other) => other.setAttribute("aria-selected", String(other === node)));
+      tab = node.dataset.tab;
+      setMsg(msg, "");
+      load();
+    });
   }
 
   if (guard()) load();

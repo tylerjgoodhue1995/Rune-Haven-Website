@@ -21,6 +21,7 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 mod admin;
+mod market;
 
 const SPL_TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const SESSION_TTL_MS: u128 = 12 * 60 * 60 * 1000;
@@ -36,7 +37,11 @@ struct Config {
     game_addr: String,
     rpc_url: String,
     vgld_mint: Option<String>,
-    marketplace_url: String,
+    market_db: PathBuf,
+    market_key_file: PathBuf,
+    market_fee_bps: u64,
+    market_treasury: Option<String>,
+    game_key: Option<String>,
     game_version: String,
 }
 
@@ -58,7 +63,11 @@ impl Config {
             game_addr: var("SITE_GAME_ADDR", "127.0.0.1:14004"),
             rpc_url: var("SITE_SOLANA_RPC_URL", "https://api.devnet.solana.com"),
             vgld_mint: std::env::var("SITE_VGLD_MINT").ok().filter(|mint| !mint.is_empty()),
-            marketplace_url: var("SITE_MARKETPLACE_URL", "http://127.0.0.1:19254"),
+            market_db: var("SITE_MARKET_DB", "market.db").into(),
+            market_key_file: var("SITE_MARKET_KEY_FILE", "market-key.hex").into(),
+            market_fee_bps: var("SITE_MARKET_FEE_BPS", "250").parse().unwrap_or(250).min(2000),
+            market_treasury: std::env::var("SITE_MARKET_TREASURY").ok().filter(|wallet| valid_wallet(wallet)),
+            game_key: std::env::var("SITE_GAME_KEY").ok().filter(|key| key.len() >= 24),
             game_version: var("SITE_GAME_VERSION", "alpha"),
         }
     }
@@ -79,6 +88,7 @@ struct Session {
 #[derive(Clone)]
 struct AppState {
     cfg: Arc<Config>,
+    market: Arc<market::Market>,
     http: reqwest::Client,
     challenges: Arc<Mutex<HashMap<String, Challenge>>>,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
@@ -495,58 +505,6 @@ async fn land(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
     Ok(Json(json!({ "parcels": owned })))
 }
 
-async fn market_listings(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
-    alpha_session(&headers, &state)?;
-    let listings: Value = state
-        .http
-        .get(format!("{}/marketplace/listings", state.cfg.marketplace_url))
-        .send()
-        .await
-        .map_err(|_| ApiError::bad_gateway("Marketplace is unavailable right now."))?
-        .json()
-        .await
-        .map_err(|_| ApiError::bad_gateway("Marketplace returned an invalid response."))?;
-    Ok(Json(json!({ "listings": listings })))
-}
-
-#[derive(Deserialize)]
-struct ConfirmBody {
-    signature: String,
-}
-
-async fn market_post(state: &AppState, parcel_id: &str, action: &str, body: Value) -> ApiResult {
-    if !parcel_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid listing."));
-    }
-    let response = state
-        .http
-        .post(format!("{}/marketplace/{parcel_id}/{action}", state.cfg.marketplace_url))
-        .json(&body)
-        .send()
-        .await
-        .map_err(|_| ApiError::bad_gateway("Marketplace is unavailable right now."))?;
-    if !response.status().is_success() {
-        let text = response.text().await.unwrap_or_default();
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, text.chars().take(200).collect::<String>()));
-    }
-    Ok(Json(response.json().await.map_err(|_| ApiError::bad_gateway("Marketplace returned an invalid response."))?))
-}
-
-async fn market_purchase(State(state): State<AppState>, headers: HeaderMap, Path(parcel_id): Path<String>) -> ApiResult {
-    let session = alpha_session(&headers, &state)?;
-    market_post(&state, &parcel_id, "purchase", json!({ "buyer": session.wallet })).await
-}
-
-async fn market_confirm(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(parcel_id): Path<String>,
-    Json(body): Json<ConfirmBody>,
-) -> ApiResult {
-    let session = alpha_session(&headers, &state)?;
-    market_post(&state, &parcel_id, "confirm", json!({ "buyer": session.wallet, "signature": body.signature })).await
-}
-
 #[tokio::main]
 async fn main() {
     let cfg = Config::from_env();
@@ -554,7 +512,9 @@ async fn main() {
         .unwrap_or_else(|_| "127.0.0.1:19260".to_string())
         .parse()
         .expect("SITE_API_BIND must be a socket address");
+    let market = market::Market::open(&cfg.market_db, &cfg.market_key_file).expect("marketplace storage");
     let state = AppState {
+        market: Arc::new(market),
         cfg: Arc::new(cfg),
         http: reqwest::Client::builder().timeout(Duration::from_secs(15)).build().expect("http client"),
         challenges: Arc::default(),
@@ -573,9 +533,17 @@ async fn main() {
         .route("/api/v1/me/characters/{id}/inventory", get(inventory))
         .route("/api/v1/me/balance", get(balance))
         .route("/api/v1/me/land", get(land))
-        .route("/api/v1/market/listings", get(market_listings))
-        .route("/api/v1/market/{parcel}/purchase", post(market_purchase))
-        .route("/api/v1/market/{parcel}/confirm", post(market_confirm))
+        .route("/api/v1/market/listings", get(market::listings).post(market::create))
+        .route("/api/v1/market/listings/{id}", axum::routing::delete(market::cancel))
+        .route("/api/v1/market/listings/{id}/purchase", post(market::purchase))
+        .route("/api/v1/market/listings/{id}/confirm", post(market::confirm))
+        .route("/api/v1/market/listings/{id}/revoke", post(market::revoke))
+        .route("/api/v1/market/owned", get(market::owned))
+        .route("/api/v1/market/approve", post(market::prepare_approval))
+        .route("/api/v1/game/deliveries", get(market::pending_deliveries))
+        .route("/api/v1/game/deliveries/{id}/ack", post(market::ack_delivery))
+        .route("/api/v1/admin/market", get(market::market_info))
+        .route("/api/v1/admin/market/assets", post(market::register_asset))
         .route("/api/v1/admin/overview", get(admin::overview))
         .route("/api/v1/admin/members", get(admin::members).post(admin::add))
         .route("/api/v1/admin/members/{wallet}", put(admin::update).delete(admin::remove))

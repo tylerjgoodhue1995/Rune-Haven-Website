@@ -967,6 +967,7 @@ name = "rune-haven-site-api"
 version = "1.0.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "bs58",
  "ed25519-dalek",
  "rand 0.9.5",
@@ -974,6 +975,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "uuid",
 ]
