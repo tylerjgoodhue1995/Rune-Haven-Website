@@ -14,77 +14,318 @@
   <header class="top" id="top"></header>
   <main class="wrap">
     <p class="eyebrow">Admin</p>
-    <h1>Alpha access</h1>
-    <div class="card" style="margin-top:26px;max-width:640px">
-      <div id="signin-box">
-        <p class="muted">Only the configured admin wallet can view or edit approved addresses.</p>
-        <button class="btn block" id="admin-signin" type="button">Admin sign-in</button>
-      </div>
-      <div id="panel" hidden>
-        <label class="toggle"><input id="alpha-open" type="checkbox"><span>Open alpha to all wallets</span></label>
-        <label class="field" for="wallets">Approved Solana wallet addresses</label>
-        <textarea id="wallets" spellcheck="false" placeholder="One wallet address per line"></textarea>
-        <button class="btn block" id="save" type="button" style="margin-top:12px">Save alpha access</button>
+    <h1>Alpha control</h1>
+
+    <div class="card gate" style="margin-top:26px;max-width:520px">
+      <h2>Sign in required</h2>
+      <p class="muted">Only the configured admin wallet can use this page.</p>
+      <button class="btn block" id="gate-signin" type="button">Connect Phantom</button>
+    </div>
+    <div class="card" id="denied" hidden style="margin-top:26px;max-width:520px">
+      <h2>Admin access required</h2>
+      <p class="muted">This wallet is not an admin.</p>
+    </div>
+
+    <div class="app" id="app" hidden>
+      <div class="tabs" role="tablist" aria-label="Admin sections">
+        <button role="tab" aria-selected="true" data-tab="overview" type="button">Overview</button>
+        <button role="tab" aria-selected="false" data-tab="members" type="button">Members</button>
+        <button role="tab" aria-selected="false" data-tab="lookup" type="button">Lookup</button>
+        <button role="tab" aria-selected="false" data-tab="activity" type="button">Activity</button>
       </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+      <section data-panel="overview">
+        <div class="grid" style="margin-top:0">
+          <div class="card kpi"><span>Game server</span><div class="big" id="o-online">—</div><p class="muted" id="o-version"></p></div>
+          <div class="card kpi"><span>Approved wallets</span><div class="big" id="o-approved">—</div></div>
+          <div class="card kpi"><span>Characters</span><div class="big" id="o-chars">—</div></div>
+          <div class="card kpi"><span>Active site sessions</span><div class="big" id="o-sessions">—</div></div>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h2>Access mode</h2>
+            <p class="muted" id="mode-text"></p>
+            <button class="btn" id="mode-btn" type="button">…</button>
+          </div>
+          <div class="card">
+            <h2>Recent activity</h2>
+            <div class="list" id="o-recent"><p class="muted">Loading…</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section data-panel="members" hidden>
+        <div class="card">
+          <h2>Add a wallet</h2>
+          <form class="form-grid" id="add-form">
+            <div><label class="field" for="add-wallet">Solana address</label><input class="text" id="add-wallet" autocomplete="off" spellcheck="false" required></div>
+            <div><label class="field" for="add-label">Label</label><input class="text" id="add-label" maxlength="60" placeholder="Name or handle"></div>
+            <div><label class="field" for="add-note">Note</label><input class="text" id="add-note" maxlength="500" placeholder="Only admins see this"></div>
+            <button class="btn" type="submit">Approve</button>
+          </form>
+        </div>
+        <div class="card" style="margin-top:18px">
+          <div class="toolbar">
+            <input class="text grow" id="search" type="search" placeholder="Search by label, note or address" aria-label="Search members">
+            <span class="muted" id="count"></span>
+            <button class="btn quiet small" id="export" type="button">Export CSV</button>
+            <button class="btn quiet small" id="import-open" type="button">Bulk import</button>
+          </div>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>Member</th><th class="num">Characters</th><th>Added</th><th></th></tr></thead>
+              <tbody id="members"><tr><td colspan="4" class="muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section data-panel="lookup" hidden>
+        <div class="card">
+          <h2>Look up a wallet</h2>
+          <form class="toolbar" id="lookup-form">
+            <input class="text grow" id="lookup-wallet" autocomplete="off" spellcheck="false" placeholder="Solana address" aria-label="Wallet to look up" required>
+            <button class="btn" type="submit">Look up</button>
+          </form>
+          <div id="lookup-result"></div>
+        </div>
+      </section>
+
+      <section data-panel="activity" hidden>
+        <div class="card">
+          <h2>Admin activity</h2>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>When</th><th>Admin</th><th>Action</th></tr></thead>
+              <tbody id="audit"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
   <footer class="bottom" id="bottom"></footer>
 </div>
+
+<dialog id="edit-dialog" aria-labelledby="edit-title">
+  <form method="dialog" id="edit-form">
+    <h2 id="edit-title">Edit member</h2>
+    <code class="wallet" id="edit-wallet"></code>
+    <label class="field" for="edit-label">Label</label><input class="text" id="edit-label" maxlength="60">
+    <label class="field" for="edit-note">Note</label><textarea id="edit-note" maxlength="500" style="min-height:90px"></textarea>
+    <div class="toolbar" style="margin:16px 0 0;justify-content:flex-end">
+      <button class="btn quiet" value="cancel" type="submit">Cancel</button>
+      <button class="btn" id="edit-save" value="save" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="import-dialog" aria-labelledby="import-title">
+  <form method="dialog" id="import-form">
+    <h2 id="import-title">Bulk import</h2>
+    <p class="muted">One per line: <code>address</code>, or <code>address, label, note</code>. A header row is ignored.</p>
+    <textarea id="import-text" spellcheck="false" aria-label="Wallets to import"></textarea>
+    <p class="msg" id="import-msg" role="status"></p>
+    <div class="toolbar" style="margin:12px 0 0;justify-content:flex-end">
+      <button class="btn quiet" value="cancel" type="submit">Close</button>
+      <button class="btn" id="import-run" type="button">Import</button>
+    </div>
+  </form>
+</dialog>
+
 <script src="/site.js"></script>
 <script>
-  const { $, shell, setMsg, b58, provider } = RH;
+  const { $, esc, api, shell, signIn, setMsg, short, fmtUnits } = RH;
   shell("/admin.html");
-  let token = "";
 
-  async function adminApi(path, method, body) {
-    const response = await fetch(path, {
-      method,
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: body ? JSON.stringify(body) : undefined,
-      cache: "no-store",
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
-    return data;
-  }
+  const ACTIONS = {
+    add_wallets: (d) => `Approved ${d.added?.length ?? 0} wallet(s)`,
+    remove_wallet: (d) => `Removed ${short(d.wallet)}`,
+    edit_wallet_note: (d) => `Edited notes for ${short(d.wallet)}`,
+    set_alpha_open: (d) => (d.alpha_open ? "Opened the alpha to everyone" : "Switched to invite-only"),
+  };
+  const describe = (e) => (ACTIONS[e.action] ? ACTIONS[e.action](e.detail || {}) : e.action);
+  const when = (ms) => new Date(ms).toLocaleString();
+  const msg = $("#msg");
+  let members = [];
+  let alphaOpen = false;
 
-  async function post(path, body) {
-    const response = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
-    return data;
-  }
-
-  $("#admin-signin").addEventListener("click", async (event) => {
-    const msg = $("#msg");
+  $("#gate-signin").addEventListener("click", async (event) => {
     event.target.disabled = true;
-    try {
-      const phantom = provider();
-      if (!phantom?.isPhantom) throw new Error("Phantom was not detected.");
-      const { publicKey } = await phantom.connect();
-      const wallet = publicKey.toString();
-      const challenge = await post("/api/alpha/challenge", { wallet });
-      const signed = await phantom.signMessage(new TextEncoder().encode(challenge.message), "utf8");
-      const result = await post("/api/alpha/verify", { wallet, nonce: challenge.nonce, signature: b58(signed.signature) });
-      if (!result.is_admin || !result.admin_session) throw new Error("This wallet is not an admin.");
-      token = result.admin_session;
-      const state = await adminApi("/api/alpha/admin/state", "GET");
-      $("#alpha-open").checked = state.alpha_open;
-      $("#wallets").value = state.allowed_wallets.join("\n");
-      $("#signin-box").hidden = true;
-      $("#panel").hidden = false;
-      setMsg(msg, "");
-    } catch (error) { setMsg(msg, error.message, "error"); event.target.disabled = false; }
+    try { await signIn(); location.reload(); } catch (error) { RH.toast(error.message); event.target.disabled = false; }
   });
 
-  $("#save").addEventListener("click", async () => {
-    const wallets = $("#wallets").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-    try {
-      await adminApi("/api/alpha/admin/state", "PUT", { alpha_open: $("#alpha-open").checked, allowed_wallets: wallets });
-      setMsg($("#msg"), "Alpha access saved.", "ok");
-    } catch (error) { setMsg($("#msg"), error.message, "error"); }
+  function showTab(name) {
+    document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+    document.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== name; });
+    setMsg(msg, "");
+    if (name === "overview") loadOverview();
+    if (name === "members") loadMembers();
+    if (name === "activity") loadAudit();
+  }
+  document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+  const run = async (job, okText) => {
+    try { const result = await job(); if (okText) setMsg(msg, okText(result), "ok"); return result; }
+    catch (error) { setMsg(msg, error.message, "error"); return null; }
+  };
+
+  async function loadOverview() {
+    const o = await run(() => api("/api/v1/admin/overview"));
+    if (!o) return;
+    $("#o-online").innerHTML = `<span class="dot ${o.game_online ? "on" : "off"}"></span>${o.game_online ? "Online" : "Offline"}`;
+    $("#o-version").textContent = `Version ${o.version}`;
+    $("#o-approved").textContent = o.approved_count;
+    $("#o-chars").textContent = o.characters ?? "—";
+    $("#o-sessions").textContent = o.active_sessions;
+    renderMode(o.alpha_open);
+    $("#o-recent").innerHTML = o.recent_activity.length
+      ? o.recent_activity.map((e) => `<div class="row"><span>${esc(describe(e))}<br><span class="muted">${esc(short(e.admin))} · ${esc(when(e.at))}</span></span></div>`).join("")
+      : '<p class="muted">No admin activity yet.</p>';
+  }
+
+  function renderMode(open) {
+    alphaOpen = open;
+    $("#mode-text").textContent = open
+      ? "The alpha is open: any wallet can sign in to the site and play."
+      : "The alpha is invite-only: only approved wallets can sign in and play.";
+    $("#mode-btn").textContent = open ? "Switch to invite-only" : "Open alpha to everyone";
+    $("#mode-btn").className = open ? "btn" : "btn danger";
+  }
+
+  $("#mode-btn").addEventListener("click", async () => {
+    const next = !alphaOpen;
+    if (next && !confirm("Open the alpha to every wallet? Anyone will be able to sign in and play.")) return;
+    const result = await run(() => api("/api/v1/admin/settings", { method: "PUT", body: { alpha_open: next } }), (r) => (r.alpha_open ? "Alpha is now open." : "Alpha is now invite-only."));
+    if (result) { renderMode(result.alpha_open); loadOverview(); }
   });
+
+  function renderMembers() {
+    const q = $("#search").value.trim().toLowerCase();
+    const shown = members.filter((m) => !q || `${m.label} ${m.note} ${m.wallet}`.toLowerCase().includes(q));
+    $("#count").textContent = `${shown.length} of ${members.length}`;
+    const body = $("#members");
+    if (!shown.length) { body.innerHTML = `<tr><td colspan="4" class="muted">${members.length ? "No matches." : "No approved wallets yet."}</td></tr>`; return; }
+    body.innerHTML = "";
+    for (const m of shown) {
+      const row = document.createElement("tr");
+      row.innerHTML = `<td><strong>${esc(m.label || "Unnamed")}</strong><br><code class="wallet">${esc(m.wallet)}</code>${m.note ? `<br><span class="muted">${esc(m.note)}</span>` : ""}</td><td class="num">${m.characters ?? "—"}</td><td class="muted">${m.added_at ? esc(when(m.added_at)) : "—"}</td><td></td>`;
+      const actions = row.lastElementChild;
+      actions.style.whiteSpace = "nowrap";
+      const edit = Object.assign(document.createElement("button"), { className: "btn quiet small", type: "button", textContent: "Edit" });
+      edit.addEventListener("click", () => openEdit(m));
+      const remove = Object.assign(document.createElement("button"), { className: "btn danger small", type: "button", textContent: "Remove" });
+      remove.style.marginLeft = "6px";
+      remove.addEventListener("click", () => removeMember(m));
+      actions.append(edit, remove);
+      body.appendChild(row);
+    }
+  }
+
+  async function loadMembers() {
+    const result = await run(() => api("/api/v1/admin/members"));
+    if (!result) return;
+    members = result.members;
+    renderMembers();
+  }
+  $("#search").addEventListener("input", renderMembers);
+
+  $("#add-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const entry = { wallet: $("#add-wallet").value.trim(), label: $("#add-label").value, note: $("#add-note").value };
+    const result = await run(() => api("/api/v1/admin/members", { body: { entries: [entry] } }));
+    if (!result) return;
+    if (result.added.length) { setMsg(msg, "Wallet approved.", "ok"); event.target.reset(); loadMembers(); }
+    else setMsg(msg, `Not added: ${result.skipped[0]?.reason || "unknown reason"}.`, "error");
+  });
+
+  async function removeMember(m) {
+    if (!confirm(`Remove ${m.label || short(m.wallet)} from the approved list? They will lose alpha access.`)) return;
+    const result = await run(() => api(`/api/v1/admin/members/${encodeURIComponent(m.wallet)}`, { method: "DELETE" }), () => "Wallet removed.");
+    if (result) loadMembers();
+  }
+
+  const editDialog = $("#edit-dialog");
+  let editing = null;
+  function openEdit(m) {
+    editing = m;
+    $("#edit-wallet").textContent = m.wallet;
+    $("#edit-label").value = m.label;
+    $("#edit-note").value = m.note;
+    editDialog.showModal();
+  }
+  $("#edit-form").addEventListener("submit", async (event) => {
+    if (event.submitter?.value !== "save" || !editing) return;
+    const result = await run(() => api(`/api/v1/admin/members/${encodeURIComponent(editing.wallet)}`, { method: "PUT", body: { label: $("#edit-label").value, note: $("#edit-note").value } }), () => "Saved.");
+    if (result) loadMembers();
+  });
+
+  const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  $("#export").addEventListener("click", () => {
+    const lines = ["wallet,label,note,added_at", ...members.map((m) => [m.wallet, m.label, m.note, m.added_at ? new Date(m.added_at).toISOString() : ""].map(csvCell).join(","))];
+    const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" })), download: "rune-haven-approved-wallets.csv" });
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+
+  function parseImport(text) {
+    return text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((line) => {
+      const [wallet, label = "", ...rest] = line.split(/[,\t]/).map((p) => p.trim().replace(/^"|"$/g, ""));
+      return { wallet, label, note: rest.join(", ") };
+    }).filter((e, i) => !(i === 0 && e.wallet.toLowerCase() === "wallet"));
+  }
+
+  const importDialog = $("#import-dialog");
+  $("#import-open").addEventListener("click", () => { setMsg($("#import-msg"), ""); importDialog.showModal(); });
+  $("#import-run").addEventListener("click", async () => {
+    const entries = parseImport($("#import-text").value);
+    const out = $("#import-msg");
+    if (!entries.length) return setMsg(out, "Nothing to import.", "error");
+    try {
+      const result = await api("/api/v1/admin/members", { body: { entries } });
+      const skipped = result.skipped.map((s) => `${short(s.wallet) || "(blank)"}: ${s.reason}`);
+      setMsg(out, `Approved ${result.added.length}, skipped ${skipped.length}.${skipped.length ? " " + skipped.slice(0, 6).join("; ") + (skipped.length > 6 ? "…" : "") : ""}`, result.added.length ? "ok" : "error");
+      if (result.added.length) { $("#import-text").value = ""; loadMembers(); }
+    } catch (error) { setMsg(out, error.message, "error"); }
+  });
+
+  $("#lookup-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const box = $("#lookup-result");
+    box.innerHTML = '<p class="muted">Looking up…</p>';
+    const wallet = $("#lookup-wallet").value.trim();
+    const p = await run(() => api(`/api/v1/admin/lookup/${encodeURIComponent(wallet)}`));
+    if (!p) { box.innerHTML = ""; return; }
+    const chars = p.characters
+      ? (p.characters.length ? p.characters.map((c) => `<div class="stat"><span>${esc(c.name)}</span><strong>${c.general_xp == null ? "—" : Number(c.general_xp).toLocaleString()} XP</strong></div>`).join("") : '<p class="muted">No characters yet.</p>')
+      : '<p class="muted">Game data unavailable.</p>';
+    const bal = p.balance
+      ? `<div class="stat"><span>SOL</span><strong>${(p.balance.sol_lamports / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 })}</strong></div><div class="stat"><span>VGLD</span><strong>${p.balance.vgld ? esc(fmtUnits(p.balance.vgld.base_units, p.balance.vgld.decimals)) : "Not configured"}</strong></div>`
+      : '<p class="muted">Balance unavailable.</p>';
+    box.innerHTML = `<div class="cols" style="margin-top:14px"><div><div class="stat"><span>Alpha access</span><strong class="${p.approved ? "pill-ok" : "pill-no"}">${p.approved ? "Approved" : "Not approved"}${p.is_admin ? " (admin)" : ""}</strong></div><div class="stat"><span>Label</span><strong>${esc(p.label || "—")}</strong></div><div class="stat"><span>Note</span><strong>${esc(p.note || "—")}</strong></div><div class="stat"><span>Game account</span><strong><code class="wallet">${esc(p.game_account)}</code></strong></div></div><div><h2 style="font-size:16px">Characters</h2>${chars}</div><div><h2 style="font-size:16px">Balances</h2>${bal}</div></div>${p.approved ? "" : '<button class="btn" id="approve-lookup" type="button" style="margin-top:14px">Approve this wallet</button>'}`;
+    $("#approve-lookup")?.addEventListener("click", async () => {
+      const result = await run(() => api("/api/v1/admin/members", { body: { entries: [{ wallet: p.wallet }] } }), () => "Wallet approved.");
+      if (result) $("#lookup-form").requestSubmit();
+    });
+  });
+
+  async function loadAudit() {
+    const result = await run(() => api("/api/v1/admin/audit?limit=100"));
+    if (!result) return;
+    $("#audit").innerHTML = result.entries.length
+      ? result.entries.map((e) => `<tr><td class="muted">${esc(when(e.at))}</td><td><code class="wallet">${esc(short(e.admin))}</code></td><td>${esc(describe(e))}</td></tr>`).join("")
+      : '<tr><td colspan="3" class="muted">No admin activity yet.</td></tr>';
+  }
+
+  (async function init() {
+    if (!RH.guard()) return;
+    const me = await api("/api/v1/me").catch(() => null);
+    if (!me) { location.reload(); return; }
+    if (!me.is_admin) { $("#denied").hidden = false; return; }
+    $("#app").hidden = false;
+    loadOverview();
+  })();
 </script>
 </body>
 </html>

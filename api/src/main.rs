@@ -12,13 +12,15 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use ed25519_dalek::{Signature, VerifyingKey};
 use rusqlite::{Connection, OpenFlags};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use uuid::Uuid;
+
+mod admin;
 
 const SPL_TOKEN_PROGRAM: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const SESSION_TTL_MS: u128 = 12 * 60 * 60 * 1000;
@@ -28,6 +30,8 @@ struct Config {
     game_db: PathBuf,
     parcels_path: PathBuf,
     alpha_access_path: PathBuf,
+    members_path: PathBuf,
+    audit_path: PathBuf,
     admin_wallets: HashSet<String>,
     game_addr: String,
     rpc_url: String,
@@ -43,6 +47,8 @@ impl Config {
             game_db: var("SITE_GAME_DB", "userdata/server/saves/db.sqlite").into(),
             parcels_path: var("SITE_PARCELS_PATH", "userdata/server/property_parcels.json").into(),
             alpha_access_path: var("SITE_ALPHA_ACCESS_PATH", "alpha-access.json").into(),
+            members_path: var("SITE_MEMBERS_PATH", "alpha-members.json").into(),
+            audit_path: var("SITE_AUDIT_PATH", "admin-audit.jsonl").into(),
             admin_wallets: var("SITE_ADMIN_WALLETS", "")
                 .split(',')
                 .map(str::trim)
@@ -77,8 +83,10 @@ struct AppState {
     challenges: Arc<Mutex<HashMap<String, Challenge>>>,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
     requests: Arc<Mutex<VecDeque<Instant>>>,
+    admin_lock: Arc<Mutex<()>>,
 }
 
+#[derive(Debug)]
 struct ApiError(StatusCode, String);
 
 impl ApiError {
@@ -235,12 +243,16 @@ fn parsed_token_accounts(result: &Value) -> Vec<(String, u64, u64)> {
         .collect()
 }
 
+async fn game_online(cfg: &Config) -> bool {
+    matches!(
+        tokio::time::timeout(Duration::from_millis(1500), tokio::net::TcpStream::connect(&cfg.game_addr)).await,
+        Ok(Ok(_))
+    )
+}
+
 async fn status(State(state): State<AppState>) -> ApiResult {
     rate_limit(&state)?;
-    let online = matches!(
-        tokio::time::timeout(Duration::from_millis(1500), tokio::net::TcpStream::connect(&state.cfg.game_addr)).await,
-        Ok(Ok(_))
-    );
+    let online = game_online(&state.cfg).await;
     Ok(Json(json!({
         "online": online,
         "version": state.cfg.game_version,
@@ -336,8 +348,13 @@ async fn me(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
 
 async fn characters(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
     let session = alpha_session(&headers, &state)?;
-    let uuid = game_uuid(&session.wallet).to_string();
-    let list = run_db(&state, move |conn| {
+    let list = character_list(&state, &session.wallet).await?;
+    Ok(Json(json!({ "characters": list })))
+}
+
+async fn character_list(state: &AppState, wallet: &str) -> Result<Vec<Value>, ApiError> {
+    let uuid = game_uuid(wallet).to_string();
+    run_db(state, move |conn| {
         let mut stmt = conn.prepare("SELECT character_id, alias FROM character WHERE player_uuid = ?1 ORDER BY character_id")?;
         let rows = stmt
             .query_map([&uuid], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?
@@ -356,8 +373,7 @@ async fn characters(State(state): State<AppState>, headers: HeaderMap) -> ApiRes
             })
             .collect::<Vec<_>>())
     })
-    .await?;
-    Ok(Json(json!({ "characters": list })))
+    .await
 }
 
 fn inventory_rows(conn: &Connection, character_id: i64) -> rusqlite::Result<Vec<Value>> {
@@ -428,7 +444,11 @@ async fn leaderboard(State(state): State<AppState>) -> ApiResult {
 
 async fn balance(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
     let session = alpha_session(&headers, &state)?;
-    let lamports = rpc(&state, "getBalance", json!([session.wallet]))
+    wallet_balance(&state, &session.wallet).await
+}
+
+async fn wallet_balance(state: &AppState, wallet: &str) -> ApiResult {
+    let lamports = rpc(state, "getBalance", json!([wallet]))
         .await?
         .get("value")
         .and_then(Value::as_u64)
@@ -436,9 +456,9 @@ async fn balance(State(state): State<AppState>, headers: HeaderMap) -> ApiResult
     let vgld = match &state.cfg.vgld_mint {
         Some(mint) => {
             let result = rpc(
-                &state,
+                state,
                 "getTokenAccountsByOwner",
-                json!([session.wallet, { "mint": mint }, { "encoding": "jsonParsed" }]),
+                json!([wallet, { "mint": mint }, { "encoding": "jsonParsed" }]),
             )
             .await?;
             let accounts = parsed_token_accounts(&result);
@@ -540,6 +560,7 @@ async fn main() {
         challenges: Arc::default(),
         sessions: Arc::default(),
         requests: Arc::default(),
+        admin_lock: Arc::default(),
     };
 
     let app = Router::new()
@@ -555,6 +576,12 @@ async fn main() {
         .route("/api/v1/market/listings", get(market_listings))
         .route("/api/v1/market/{parcel}/purchase", post(market_purchase))
         .route("/api/v1/market/{parcel}/confirm", post(market_confirm))
+        .route("/api/v1/admin/overview", get(admin::overview))
+        .route("/api/v1/admin/members", get(admin::members).post(admin::add))
+        .route("/api/v1/admin/members/{wallet}", put(admin::update).delete(admin::remove))
+        .route("/api/v1/admin/settings", put(admin::settings))
+        .route("/api/v1/admin/audit", get(admin::audit_log))
+        .route("/api/v1/admin/lookup/{wallet}", get(admin::lookup))
         .with_state(state);
 
     println!("Rune Haven site API listening on {bind}");

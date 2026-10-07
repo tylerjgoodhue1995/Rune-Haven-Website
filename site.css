@@ -85,4 +85,24 @@ label.field { display: block; margin: 12px 0 7px; color: var(--muted); font: 11p
 .toggle { display: flex; align-items: center; gap: 10px; margin: 10px 0; font: 13px var(--sans); }
 .toggle input { width: 17px; height: 17px; accent-color: var(--teal); }
 footer.bottom { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px clamp(18px, 5vw, 76px); border-top: 1px solid rgba(240,221,186,.12); color: rgba(226,217,204,.72); font: 11px var(--sans); }
+input.text, select.text { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid rgba(236,216,174,.24); border-radius: 4px; background: rgba(6,8,13,.65); color: var(--ink); font: 13px var(--sans); }
+input.text:focus, textarea:focus { outline: 2px solid rgba(89,215,197,.55); outline-offset: 1px; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin: 22px 0 18px; border-bottom: 1px solid var(--line); }
+.tabs button { padding: 10px 16px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: 14px var(--sans); cursor: pointer; }
+.tabs button[aria-selected="true"] { color: #fff; border-bottom-color: var(--teal); }
+.tabs button:hover { color: #fff; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.toolbar .grow { flex: 1 1 220px; }
+.btn.small { min-height: 32px; padding: 0 12px; font-size: 12px; }
+.btn.danger { background: linear-gradient(110deg, #8a2f2f, #6d2626); border-color: rgba(230,120,110,.5); }
+.form-grid { display: grid; gap: 10px; grid-template-columns: 2fr 1fr 2fr auto; align-items: end; }
+.cols { display: grid; gap: 18px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.big { font-size: 30px; color: #fff8eb; line-height: 1.1; }
+.kpi span { display: block; margin-bottom: 6px; color: var(--muted); font: 11px var(--sans); letter-spacing: .1em; text-transform: uppercase; }
+code.wallet { font: 12px ui-monospace, monospace; overflow-wrap: anywhere; }
+.pill-ok { color: #8fe5c2; } .pill-no { color: #ffb8a7; }
+dialog { max-width: 460px; width: calc(100% - 32px); padding: 22px; border: 1px solid var(--line); border-radius: 8px; background: #17151d; color: var(--ink); }
+dialog::backdrop { background: rgba(0,0,0,.6); }
+.scroll { overflow-x: auto; }
+@media (max-width: 800px) { .form-grid { grid-template-columns: 1fr; } }
 @media (max-width: 800px) { .hero { grid-template-columns: 1fr; } }
