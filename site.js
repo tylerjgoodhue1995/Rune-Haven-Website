@@ -74,7 +74,18 @@
       ? `<span class="account"><code>${esc(short(current.wallet))}</code><button class="btn quiet" id="signout" type="button">Sign out</button></span>`
       : '<button class="btn" id="signin" type="button">Connect Phantom</button>';
     $("#top").innerHTML = `<a class="brand" href="/"><img src="/assets/rune-haven-logo.png" alt=""><span class="brand-title">Rune Haven</span></a><nav class="links" aria-label="Main">${links.join("")}</nav>${account}`;
-    $("#bottom").innerHTML = '<span>Rune Haven Alpha · Solana</span><a href="https://github.com/tylerjgoodhue1995/Rune-Haven/releases" target="_blank" rel="noopener">Game updates</a>';
+    $("#bottom").innerHTML = '<span>© Rune Haven · Alpha on Solana</span><span><a href="/news.html">News</a> · <a href="https://github.com/tylerjgoodhue1995/Rune-Haven/releases" target="_blank" rel="noopener">Game updates</a></span>';
+    if (!$(".embers") && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const layer = document.createElement("div");
+      layer.className = "embers";
+      layer.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 26; i++) {
+        const ember = document.createElement("i");
+        ember.style.cssText = `left:${Math.random() * 100}%;--s:${(2 + Math.random() * 4).toFixed(1)}px;--d:${(14 + Math.random() * 18).toFixed(1)}s;--delay:-${(Math.random() * 30).toFixed(1)}s;--x:${(Math.random() * 120 - 60).toFixed(0)}px`;
+        layer.appendChild(ember);
+      }
+      document.body.prepend(layer);
+    }
     $("#signin")?.addEventListener("click", async (event) => {
       event.target.disabled = true;
       try { await signIn(); location.reload(); } catch (error) { toast(error.message); event.target.disabled = false; }

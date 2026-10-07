@@ -9,6 +9,11 @@
 	@api path /api/v1/*
 	reverse_proxy @api 127.0.0.1:19260
 
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=86400"
+	@pages not path /assets/* /api/*
+	header @pages Cache-Control "no-cache"
+
 	root * C:/ProgramData/RuneHaven/Website
 	file_server
 }

@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#111016">
-<title>Rune Haven | Alpha</title>
-<link rel="stylesheet" href="/site.css">
+<meta name="theme-color" content="#12070d">
+<meta name="description" content="Rune Haven is a voxel fantasy world where your Solana wallet is your account. Join the private alpha.">
+<title>Rune Haven | Private Alpha</title>
+<link rel="preload" href="/assets/fonts/cinzel.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/site.css?v=20261007a">
 </head>
 <body>
 <div class="world" aria-hidden="true"></div>
@@ -14,36 +17,85 @@
   <main class="wrap">
     <section class="hero">
       <div>
-        <p class="eyebrow">Private alpha</p>
-        <h1>Rune Haven<br>Alpha</h1>
-        <p class="lead" id="lead">Rune Haven Alpha is invite-only. Sign in with your Solana wallet to check access.</p>
-        <p class="muted" style="max-width:500px;margin-top:28px;padding-left:18px;border-left:2px solid var(--gold)">Your wallet address is your alpha ID and your in-game account. A one-time signature proves ownership; your private key never leaves your wallet.</p>
+        <p class="eyebrow">Private alpha · Solana</p>
+        <h1>Rune<br>Haven</h1>
+        <p class="lead" id="lead">Step into a living voxel world. Your Solana wallet is your account, your characters and your claim to the land.</p>
+        <div class="cta" id="cta"></div>
+        <div class="chips">
+          <span class="badge"><span class="dot" id="st-dot"></span><span id="st-online">Checking server…</span></span>
+          <span class="badge" id="st-alpha">Alpha</span>
+          <span class="badge" id="st-version" hidden></span>
+        </div>
       </div>
-      <div class="card" id="access-card">
+      <div class="card glow" id="access-card">
         <h2>Enter the realm</h2>
         <div id="access-body"></div>
         <p class="msg" id="msg" role="status" aria-live="polite"></p>
       </div>
     </section>
-    <section class="grid">
-      <div class="card">
-        <h2>Server status</h2>
-        <div class="stat"><span>Game server</span><strong id="st-online">Checking…</strong></div>
-        <div class="stat"><span>Version</span><strong id="st-version">—</strong></div>
-        <div class="stat"><span>Alpha access</span><strong id="st-alpha">—</strong></div>
+
+    <section class="section" aria-labelledby="why">
+      <div class="section-head">
+        <p class="eyebrow">The world</p>
+        <h2 id="why">Built around ownership</h2>
+        <p class="lead">No passwords, no middlemen. Everything you do in Rune Haven is tied to the wallet you already hold.</p>
       </div>
-      <div class="card">
-        <h2>Leaderboard</h2>
-        <table aria-label="Top players by General XP">
-          <thead><tr><th>#</th><th>Character</th><th class="num">General XP</th></tr></thead>
-          <tbody id="board"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
-        </table>
+      <div class="features">
+        <article class="card lift feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M16 12.5h2.5"/><path d="M3 9.5h18"/></svg></div>
+          <h3>Your wallet is your account</h3>
+          <p>Sign in with Phantom and sign one message. The same wallet logs you into the game, so there is nothing to remember and nothing to leak.</p>
+        </article>
+        <article class="card lift feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l5-9 4 6 3-4 6 7z"/><circle cx="17" cy="6" r="2"/></svg></div>
+          <h3>Land you can truly own</h3>
+          <p>Parcels are NFTs on Solana. Browse the marketplace, buy a plot with your wallet, and see it on your dashboard.</p>
+        </article>
+        <article class="card lift feature">
+          <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/></svg></div>
+          <h3>A living voxel world</h3>
+          <p>Explore generated continents, towns and wilderness together with other adventurers in an open-world fantasy realm.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="join">
+      <div class="section-head">
+        <p class="eyebrow">Get started</p>
+        <h2 id="join">Join the alpha in three steps</h2>
+      </div>
+      <div class="steps">
+        <div class="card step"><h3>Connect your wallet</h3><p>Use Phantom to sign in. You only sign a message; nothing is spent and no keys are shared.</p></div>
+        <div class="card step"><h3>Get approved</h3><p>The alpha is invite-only. If your wallet is approved, access unlocks the moment you sign in.</p></div>
+        <div class="card step"><h3>Download and play</h3><p>Grab the launcher, log in with the same wallet, and your characters appear on your dashboard.</p></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="live">
+      <div class="section-head">
+        <p class="eyebrow">Live</p>
+        <h2 id="live">The realm right now</h2>
+      </div>
+      <div class="grid" style="margin-top:0">
+        <div class="card">
+          <h2>Server status</h2>
+          <div class="stat"><span>Game server</span><strong id="s-online">Checking…</strong></div>
+          <div class="stat"><span>Version</span><strong id="s-version">—</strong></div>
+          <div class="stat"><span>Alpha access</span><strong id="s-alpha">—</strong></div>
+        </div>
+        <div class="card">
+          <h2>Leaderboard</h2>
+          <table aria-label="Top players by General XP">
+            <thead><tr><th>Rank</th><th>Character</th><th class="num">General XP</th></tr></thead>
+            <tbody id="board"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
   <footer class="bottom" id="bottom"></footer>
 </div>
-<script src="/site.js"></script>
+<script src="/site.js?v=20261007a"></script>
 <script>
   const { $, esc, api, session, shell, signIn, setMsg } = RH;
   shell("/");
@@ -52,35 +104,48 @@
   const launcher = /mac/i.test(platform) ? "Rune.Haven-macos-aarch64.dmg" : "Rune.Haven.Setup.exe";
   const launcherUrl = `https://github.com/tylerjgoodhue1995/Spaceship/releases/latest/download/${launcher}`;
 
+  async function connect(button) {
+    button.disabled = true;
+    setMsg($("#msg"), "Approve the sign-in request in Phantom…");
+    try { await signIn(); location.reload(); } catch (error) { setMsg($("#msg"), error.message, "error"); button.disabled = false; }
+  }
+
   function renderAccess() {
     const s = session();
     const body = $("#access-body");
+    const cta = $("#cta");
     if (!s) {
       body.innerHTML = '<p class="muted">Connect Phantom to check whether your wallet is approved for the alpha.</p><button class="btn block" id="connect" type="button">Connect Phantom</button>';
-      $("#connect").addEventListener("click", async (event) => {
-        event.target.disabled = true;
-        setMsg($("#msg"), "Approve the sign-in request in Phantom…");
-        try { await signIn(); location.reload(); } catch (error) { setMsg($("#msg"), error.message, "error"); event.target.disabled = false; }
-      });
+      cta.innerHTML = '<button class="btn lg" id="cta-connect" type="button">Connect wallet</button><a class="btn quiet lg" href="/news.html">Read the news</a>';
+      $("#connect").addEventListener("click", (e) => connect(e.currentTarget));
+      $("#cta-connect").addEventListener("click", (e) => connect(e.currentTarget));
     } else if (s.alpha_access) {
-      body.innerHTML = `<p class="muted">Signed in as <code>${esc(RH.short(s.wallet))}</code>. You are approved for the alpha.</p><a class="btn gold block" href="${launcherUrl}" download="${launcher}">Download launcher</a><a class="btn quiet block" style="margin-top:10px" href="/dashboard.html">Open dashboard</a>`;
+      body.innerHTML = `<p class="muted">Signed in as <code class="wallet">${esc(RH.short(s.wallet))}</code>. You are approved for the alpha.</p><a class="btn gold block" href="${launcherUrl}" download="${launcher}">Download launcher</a><a class="btn quiet block" style="margin-top:10px" href="/dashboard.html">Open dashboard</a>`;
+      cta.innerHTML = `<a class="btn gold lg" href="${launcherUrl}" download="${launcher}">Download launcher</a><a class="btn quiet lg" href="/dashboard.html">Your dashboard</a>`;
       setMsg($("#msg"), "Wallet verified. Alpha access granted.", "ok");
     } else {
-      body.innerHTML = `<p class="muted">Signed in as <code>${esc(RH.short(s.wallet))}</code>.</p>`;
-      setMsg($("#msg"), "This wallet is not on the alpha access list.", "error");
+      body.innerHTML = `<p class="muted">Signed in as <code class="wallet">${esc(RH.short(s.wallet))}</code>.</p>`;
+      cta.innerHTML = '<a class="btn quiet lg" href="/news.html">Read the news</a>';
+      setMsg($("#msg"), "This wallet is not on the alpha access list yet.", "error");
     }
   }
 
   async function loadStatus() {
     try {
       const s = await api("/api/v1/status", { auth: false });
-      $("#st-online").innerHTML = `<span class="dot ${s.online ? "on" : "off"}"></span>${s.online ? "Online" : "Offline"}`;
-      $("#st-version").textContent = s.version;
-      $("#st-alpha").textContent = s.alpha_open ? "Open alpha" : "Invite-only";
-      $("#lead").textContent = s.alpha_open
-        ? "Alpha access is open. Connect your Solana wallet to enter Rune Haven."
-        : "Rune Haven Alpha is invite-only. Sign in with your Solana wallet to check access.";
-    } catch { $("#st-online").textContent = "Unavailable"; }
+      const mode = s.alpha_open ? "Open alpha" : "Invite-only alpha";
+      $("#st-dot").className = `dot ${s.online ? "on" : "off"}`;
+      $("#st-online").textContent = s.online ? "Server online" : "Server offline";
+      $("#st-alpha").textContent = mode;
+      $("#st-version").textContent = `v${s.version}`;
+      $("#st-version").hidden = false;
+      $("#s-online").innerHTML = `<span class="dot ${s.online ? "on" : "off"}"></span>${s.online ? "Online" : "Offline"}`;
+      $("#s-version").textContent = s.version;
+      $("#s-alpha").textContent = mode;
+    } catch {
+      $("#st-online").textContent = "Status unavailable";
+      $("#s-online").textContent = "Unavailable";
+    }
   }
 
   async function loadBoard() {
@@ -88,8 +153,8 @@
     try {
       const { players } = await api("/api/v1/leaderboard", { auth: false });
       body.innerHTML = players.length
-        ? players.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td class="num">${Number(p.general_xp).toLocaleString()}</td></tr>`).join("")
-        : '<tr><td colspan="3" class="muted">No characters yet.</td></tr>';
+        ? players.map((p, i) => `<tr><td><span class="rank${i < 3 ? ` r${i + 1}` : ""}">${i + 1}</span></td><td>${esc(p.name)}</td><td class="num">${Number(p.general_xp).toLocaleString()}</td></tr>`).join("")
+        : '<tr><td colspan="3" class="muted">No adventurers yet. Be the first.</td></tr>';
     } catch { body.innerHTML = '<tr><td colspan="3" class="muted">Leaderboard unavailable.</td></tr>'; }
   }
 
