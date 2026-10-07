@@ -8,7 +8,7 @@
 <title>Rune Haven | Private Alpha</title>
 <link rel="preload" href="/assets/fonts/cinzel.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/site.css?v=20261007a">
+<link rel="stylesheet" href="/site.css?v=20261007d">
 </head>
 <body>
 <div class="world" aria-hidden="true"></div>
@@ -17,8 +17,9 @@
   <main class="wrap">
     <section class="hero">
       <div>
-        <p class="eyebrow">Private alpha · Solana</p>
+        <p class="eyebrow">Voxel MMORPG · Private alpha</p>
         <h1>Rune<br>Haven</h1>
+        <p class="tagline">Own your legend</p>
         <p class="lead" id="lead">Step into a living voxel world. Your Solana wallet is your account, your characters and your claim to the land.</p>
         <div class="cta" id="cta"></div>
         <div class="chips">
@@ -31,6 +32,29 @@
         <h2>Enter the realm</h2>
         <div id="access-body"></div>
         <p class="msg" id="msg" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <div class="hud" aria-label="Realm at a glance">
+      <div><b>Open world</b><span>Voxel continents</span></div>
+      <div><b>6 kin</b><span>Playable species</span></div>
+      <div><b>NFT land</b><span>Claim your parcel</span></div>
+      <div><b>Player trade</b><span>Marketplace in VGLD</span></div>
+    </div>
+
+    <section class="section" aria-labelledby="kin">
+      <div class="section-head">
+        <p class="eyebrow">Choose your kin</p>
+        <h2 id="kin">Six peoples, one realm</h2>
+        <p class="lead">Everyone can start as a Human. Every other people is a collectible character NFT you earn or buy on the marketplace.</p>
+      </div>
+      <div class="kin">
+        <article class="kin-card"><div class="crest" aria-hidden="true">H</div><span class="rarity">Common</span><h3>Human</h3><p>Versatile settlers of every road and town. The way every adventurer begins.</p><span class="price">Free for everyone</span></article>
+        <article class="kin-card rare"><div class="crest" aria-hidden="true">E</div><span class="rarity">Rare</span><h3>Elf</h3><p>Graceful, long-lived wanderers of the deep forests.</p><span class="price">Character NFT</span></article>
+        <article class="kin-card rare"><div class="crest" aria-hidden="true">D</div><span class="rarity">Rare</span><h3>Dwarf</h3><p>Stout miners and smiths who carve halls out of the mountain.</p><span class="price">Character NFT</span></article>
+        <article class="kin-card epic"><div class="crest" aria-hidden="true">O</div><span class="rarity">Epic</span><h3>Orc</h3><p>Fierce, proud warriors forged by hard country.</p><span class="price">Character NFT</span></article>
+        <article class="kin-card epic"><div class="crest" aria-hidden="true">N</div><span class="rarity">Epic</span><h3>Danari</h3><p>Small, quick and strange, at home where others cannot go.</p><span class="price">Character NFT</span></article>
+        <article class="kin-card legend"><div class="crest" aria-hidden="true">R</div><span class="rarity">Legendary</span><h3>Draugr</h3><p>The restless dead, pale and patient, bound to no living lord.</p><span class="price">Character NFT</span></article>
       </div>
     </section>
 
@@ -61,13 +85,28 @@
 
     <section class="section" aria-labelledby="join">
       <div class="section-head">
-        <p class="eyebrow">Get started</p>
+        <p class="eyebrow">Your first quest</p>
         <h2 id="join">Join the alpha in three steps</h2>
       </div>
       <div class="steps">
-        <div class="card step"><h3>Connect your wallet</h3><p>Use Phantom to sign in. You only sign a message; nothing is spent and no keys are shared.</p></div>
-        <div class="card step"><h3>Get approved</h3><p>The alpha is invite-only. If your wallet is approved, access unlocks the moment you sign in.</p></div>
-        <div class="card step"><h3>Download and play</h3><p>Grab the launcher, log in with the same wallet, and your characters appear on your dashboard.</p></div>
+        <div class="card step"><h3>Link your wallet</h3><p>Use Phantom to sign in. You only sign a message; nothing is spent and no keys are shared.</p><span class="reward">Reward: your account</span></div>
+        <div class="card step"><h3>Earn your invite</h3><p>The alpha is invite-only. If your wallet is approved, access unlocks the moment you sign in.</p><span class="reward">Reward: alpha access</span></div>
+        <div class="card step"><h3>Enter the realm</h3><p>Grab the launcher, log in with the same wallet, and your characters appear on your dashboard.</p><span class="reward">Reward: a whole world</span></div>
+      </div>
+      <div class="xp" id="xp" aria-hidden="true"><i></i></div>
+      <p class="xp-label">Quest progress &middot; Level 1 adventurer</p>
+    </section>
+
+    <section class="section" aria-labelledby="bazaar">
+      <div class="section-head">
+        <p class="eyebrow">The bazaar</p>
+        <h2 id="bazaar">Trade with other adventurers</h2>
+        <p class="lead">Land, gear and heroes are NFTs. Buy and sell them with VGLD, settled in a single wallet signature.</p>
+      </div>
+      <div class="bazaar">
+        <a href="/market.html"><h3>Land</h3><p>Claim a parcel of the world and build on it.</p><span class="go">Browse land &rarr;</span></a>
+        <a href="/market.html"><h3>Gear &amp; items</h3><p>Rare equipment minted as one-of-one tokens.</p><span class="go">Browse items &rarr;</span></a>
+        <a href="/market.html"><h3>Heroes</h3><p>Unlock Elf, Dwarf, Orc, Danari and Draugr characters.</p><span class="go">Browse heroes &rarr;</span></a>
       </div>
     </section>
 
@@ -95,10 +134,11 @@
   </main>
   <footer class="bottom" id="bottom"></footer>
 </div>
-<script src="/site.js?v=20261007a"></script>
+<script src="/site.js?v=20261007d"></script>
 <script>
   const { $, esc, api, session, shell, signIn, setMsg } = RH;
   shell("/");
+  new IntersectionObserver((entries, observer) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); observer.unobserve(e.target); } }), { threshold: 0.1 }).observe($("#xp"));
 
   const platform = navigator.userAgentData?.platform || navigator.platform || "";
   const launcher = /mac/i.test(platform) ? "Rune.Haven-macos-aarch64.dmg" : "Rune.Haven.Setup.exe";
