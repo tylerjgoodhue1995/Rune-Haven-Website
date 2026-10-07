@@ -541,6 +541,7 @@ async fn main() {
         .route("/api/v1/market/owned", get(market::owned))
         .route("/api/v1/market/approve", post(market::prepare_approval))
         .route("/api/v1/game/deliveries", get(market::pending_deliveries))
+        .route("/api/v1/game/entitlements/{wallet}", get(market::entitlements))
         .route("/api/v1/game/deliveries/{id}/ack", post(market::ack_delivery))
         .route("/api/v1/admin/market", get(market::market_info))
         .route("/api/v1/admin/market/assets", post(market::register_asset))

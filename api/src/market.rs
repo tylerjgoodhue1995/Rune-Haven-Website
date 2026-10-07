@@ -345,12 +345,11 @@ pub async fn listings(State(state): State<AppState>, headers: HeaderMap, Query(q
     Ok(Json(json!({ "listings": rows, "vgld": token, "fee_bps": state.cfg.market_fee_bps })))
 }
 
-/// Assets the signed-in wallet holds that can be traded, and whether each is approved or already listed.
-pub async fn owned(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
-    let session = alpha_session(&headers, &state)?;
-    let result = rpc(&state, "getTokenAccountsByOwner", json!([session.wallet, { "programId": SPL_TOKEN_PROGRAM }, { "encoding": "jsonParsed" }])).await?;
+/// Single-supply tokens the wallet holds, with whether each is approved for the marketplace.
+async fn held_nfts(state: &AppState, wallet: &str) -> Result<Vec<(String, bool)>, ApiError> {
+    let result = rpc(state, "getTokenAccountsByOwner", json!([wallet, { "programId": SPL_TOKEN_PROGRAM }, { "encoding": "jsonParsed" }])).await?;
     let delegate = b58(&state.market.delegate());
-    let held: Vec<(String, bool)> = result
+    Ok(result
         .get("value")
         .and_then(Value::as_array)
         .into_iter()
@@ -364,7 +363,40 @@ pub async fn owned(State(state): State<AppState>, headers: HeaderMap) -> ApiResu
                 && info.pointer("/delegatedAmount/amount").and_then(Value::as_str) == Some("1");
             Some((info.get("mint")?.as_str()?.to_owned(), approved))
         })
-        .collect();
+        .collect())
+}
+
+const SPECIES: [&str; 5] = ["Danari", "Dwarf", "Elf", "Orc", "Draugr"];
+
+/// Humanoid species the wallet may play, from the character NFTs it holds. Human is free and not listed.
+pub async fn entitlements(State(state): State<AppState>, headers: HeaderMap, Path(wallet): Path<String>) -> ApiResult {
+    game_authorized(&state, &headers)?;
+    if !valid_wallet(&wallet) {
+        return Err(bad("Invalid wallet."));
+    }
+    let held = held_nfts(&state, &wallet).await?;
+    let mut species: Vec<String> = Vec::new();
+    for (mint, _) in held {
+        let reference: Option<String> = state
+            .market
+            .db()
+            .query_row("SELECT reference FROM assets WHERE mint = ?1 AND kind = 'character'", [&mint], |row| row.get(0))
+            .optional()
+            .map_err(db_err)?;
+        if let Some(name) = reference.as_deref().and_then(|r| r.strip_prefix("species:"))
+            && SPECIES.contains(&name)
+            && !species.iter().any(|s| s == name)
+        {
+            species.push(name.to_owned());
+        }
+    }
+    Ok(Json(json!({ "species": species })))
+}
+
+/// Assets the signed-in wallet holds that can be traded, and whether each is approved or already listed.
+pub async fn owned(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
+    let session = alpha_session(&headers, &state)?;
+    let held = held_nfts(&state, &session.wallet).await?;
     let listed: HashSet<String> = {
         let db = state.market.db();
         let mut stmt = db.prepare("SELECT mint FROM listings WHERE status = 'active' AND seller = ?1").map_err(db_err)?;
@@ -627,6 +659,9 @@ pub async fn register_asset(State(state): State<AppState>, headers: HeaderMap, J
     let reference: String = body.reference.chars().filter(|c| !c.is_control()).take(200).collect();
     if !valid_wallet(&body.mint) || !matches!(body.kind.as_str(), "item" | "character") || name.trim().is_empty() || reference.trim().is_empty() {
         return Err(bad("Provide a valid mint, a kind of item or character, a name and a game reference."));
+    }
+    if body.kind == "character" && !reference.strip_prefix("species:").is_some_and(|name| SPECIES.contains(&name)) {
+        return Err(bad("A character reference must be species:Danari, Dwarf, Elf, Orc or Draugr."));
     }
     state
         .market
