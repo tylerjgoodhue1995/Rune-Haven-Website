@@ -32,6 +32,7 @@
         <button role="tab" aria-selected="false" data-tab="members" type="button">Members</button>
         <button role="tab" aria-selected="false" data-tab="lookup" type="button">Lookup</button>
         <button role="tab" aria-selected="false" data-tab="activity" type="button">Activity</button>
+        <button role="tab" aria-selected="false" data-tab="market" type="button">Market</button>
       </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
 
@@ -103,6 +104,33 @@
           </div>
         </div>
       </section>
+      <section data-panel="market" hidden>
+        <div class="grid" style="margin-top:0">
+          <div class="card">
+            <h2>Marketplace wallet</h2>
+            <p class="muted">This wallet pays Solana fees when minting. Fund it with devnet SOL at faucet.solana.com.</p>
+            <div class="stat"><span>Address</span><strong><code id="m-delegate">—</code></strong></div>
+            <div class="stat"><span>Balance</span><strong id="m-sol">—</strong></div>
+            <div class="stat"><span>Active listings</span><strong id="m-listings">—</strong></div>
+            <div class="stat"><span>Sales</span><strong id="m-sales">—</strong></div>
+            <div class="stat"><span>Pending game deliveries</span><strong id="m-deliveries">—</strong></div>
+          </div>
+          <div class="card">
+            <h2>Mint a character NFT</h2>
+            <p class="muted">Creates a one-of-one token and sends it to the wallet below. Its owner can then list it in the marketplace.</p>
+            <form class="form-grid" id="mint-form">
+              <div><label class="field" for="mint-species">Species</label>
+                <select class="text" id="mint-species"><option>Orc</option><option>Elf</option><option>Dwarf</option><option>Danari</option><option>Draugr</option></select></div>
+              <div><label class="field" for="mint-recipient">Send to wallet</label><input class="text" id="mint-recipient" autocomplete="off" spellcheck="false" required></div>
+              <button class="btn" type="submit">Mint</button>
+            </form>
+          </div>
+        </div>
+        <div class="card" style="margin-top:18px">
+          <h2>Minted characters</h2>
+          <div class="list" id="m-characters"><p class="muted">None yet.</p></div>
+        </div>
+      </section>
     </div>
   </main>
   <footer class="bottom" id="bottom"></footer>
@@ -163,6 +191,7 @@
     if (name === "overview") loadOverview();
     if (name === "members") loadMembers();
     if (name === "activity") loadAudit();
+    if (name === "market") loadMarket();
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 
@@ -170,6 +199,34 @@
     try { const result = await job(); if (okText) setMsg(msg, okText(result), "ok"); return result; }
     catch (error) { setMsg(msg, error.message, "error"); return null; }
   };
+
+  async function loadMarket() {
+    const m = await run(() => api("/api/v1/admin/market"));
+    if (!m) return;
+    $("#m-delegate").textContent = m.delegate;
+    $("#m-sol").textContent = m.sol_lamports == null ? "unavailable" : `${(m.sol_lamports / 1e9).toFixed(3)} SOL`;
+    $("#m-listings").textContent = m.active_listings;
+    $("#m-sales").textContent = m.sales;
+    $("#m-deliveries").textContent = m.pending_deliveries;
+    const box = $("#m-characters");
+    box.innerHTML = m.characters.length ? "" : '<p class="muted">None yet.</p>';
+    for (const c of m.characters) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `<span><strong>${esc(c.name)}</strong><br><span class="muted">${esc(c.reference)}</span></span><code>${esc(short(c.mint))}</code>`;
+      box.appendChild(row);
+    }
+  }
+
+  $("#mint-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    setMsg(msg, "Minting on Solana�");
+    const result = await run(() => api("/api/v1/admin/market/mint-character", { method: "POST", body: { species: $("#mint-species").value, recipient: $("#mint-recipient").value.trim() } }), (r) => `Minted ${short(r.mint)}.`);
+    button.disabled = false;
+    if (result) loadMarket();
+  });
 
   async function loadOverview() {
     const o = await run(() => api("/api/v1/admin/overview"));

@@ -678,10 +678,19 @@ pub async fn register_asset(State(state): State<AppState>, headers: HeaderMap, J
 
 pub async fn market_info(State(state): State<AppState>, headers: HeaderMap) -> ApiResult {
     admin_session(&headers, &state)?;
+    let sol_lamports = rpc(&state, "getBalance", json!([b58(&state.market.delegate())])).await.ok().and_then(|v| v.get("value").and_then(Value::as_u64));
     let db = state.market.db();
     let count = |sql: &str| db.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap_or(0);
+    let characters: Vec<Value> = db
+        .prepare("SELECT mint, name, reference FROM assets WHERE kind = 'character' ORDER BY created_at DESC LIMIT 50")
+        .and_then(|mut stmt| {
+            stmt.query_map([], |row| Ok(json!({ "mint": row.get::<_, String>(0)?, "name": row.get::<_, String>(1)?, "reference": row.get::<_, String>(2)? })))?
+                .collect::<rusqlite::Result<Vec<_>>>()
+        })
+        .unwrap_or_default();
     Ok(Json(json!({
         "delegate": b58(&state.market.delegate()),
+        "sol_lamports": sol_lamports,
         "vgld_mint": state.cfg.vgld_mint,
         "fee_bps": state.cfg.market_fee_bps,
         "assets": count("SELECT COUNT(*) FROM assets"),
@@ -689,7 +698,109 @@ pub async fn market_info(State(state): State<AppState>, headers: HeaderMap) -> A
         "sales": count("SELECT COUNT(*) FROM listings WHERE status = 'sold'"),
         "pending_deliveries": count("SELECT COUNT(*) FROM deliveries WHERE status = 'pending'"),
         "game_delivery_enabled": state.cfg.game_key.is_some(),
+        "characters": characters,
     })))
+}
+
+fn system_create_account_ix(from: &Key, to: &Key, lamports: u64, space: u64, owner: &Key) -> Ix {
+    let mut data = vec![0, 0, 0, 0];
+    data.extend_from_slice(&lamports.to_le_bytes());
+    data.extend_from_slice(&space.to_le_bytes());
+    data.extend_from_slice(owner);
+    Ix { program: konst(SYSTEM_PROGRAM), accounts: vec![(*from, true, true), (*to, true, true)], data }
+}
+
+fn initialize_mint2_ix(mint: &Key, authority: &Key) -> Ix {
+    let mut data = vec![20, 0];
+    data.extend_from_slice(authority);
+    data.push(0);
+    Ix { program: konst(SPL_TOKEN_PROGRAM), accounts: vec![(*mint, false, true)], data }
+}
+
+fn mint_to_ix(mint: &Key, dest: &Key, authority: &Key) -> Ix {
+    let mut data = vec![7];
+    data.extend_from_slice(&1u64.to_le_bytes());
+    Ix { program: konst(SPL_TOKEN_PROGRAM), accounts: vec![(*mint, false, true), (*dest, false, true), (*authority, true, false)], data }
+}
+
+/// Removing the mint authority guarantees the supply stays at exactly one.
+fn lock_supply_ix(mint: &Key, authority: &Key) -> Ix {
+    Ix { program: konst(SPL_TOKEN_PROGRAM), accounts: vec![(*mint, false, true), (*authority, true, false)], data: vec![6, 0, 0] }
+}
+
+fn sign_with(keys: &[&SigningKey], payer: &Key, instructions: &[Ix], blockhash: &Key) -> Vec<u8> {
+    let (message, signers) = compile(payer, instructions, blockhash);
+    let mut tx = Vec::new();
+    compact(&mut tx, signers.len());
+    for signer in &signers {
+        match keys.iter().find(|key| key.verifying_key().to_bytes() == *signer) {
+            Some(key) => tx.extend_from_slice(&key.sign(&message).to_bytes()),
+            None => tx.extend_from_slice(&[0u8; 64]),
+        }
+    }
+    tx.extend_from_slice(&message);
+    tx
+}
+
+#[derive(Deserialize)]
+pub struct MintCharacterBody {
+    species: String,
+    recipient: String,
+}
+
+/// Mints a one-of-one character NFT with the platform key, sends it to `recipient`, and registers it for trading.
+pub async fn mint_character(State(state): State<AppState>, headers: HeaderMap, Json(body): Json<MintCharacterBody>) -> ApiResult {
+    let admin = admin_session(&headers, &state)?;
+    if !SPECIES.contains(&body.species.as_str()) {
+        return Err(bad("Species must be Danari, Dwarf, Elf, Orc or Draugr."));
+    }
+    let recipient = key(&body.recipient)?;
+    let payer = state.market.delegate();
+    let mint_key = SigningKey::from_bytes(&rand::random());
+    let mint = mint_key.verifying_key().to_bytes();
+    let rent = rpc(&state, "getMinimumBalanceForRentExemption", json!([82])).await?.as_u64().ok_or_else(|| ApiError::bad_gateway("Could not read the rent amount."))?;
+    let ixs = [
+        system_create_account_ix(&payer, &mint, rent, 82, &konst(SPL_TOKEN_PROGRAM)),
+        initialize_mint2_ix(&mint, &payer),
+        create_ata_ix(&payer, &recipient, &mint),
+        mint_to_ix(&mint, &ata(&recipient, &mint), &payer),
+        lock_supply_ix(&mint, &payer),
+    ];
+    let raw = sign_with(&[&state.market.key, &mint_key], &payer, &ixs, &blockhash(&state).await?);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
+    let signature = rpc(&state, "sendTransaction", json!([encoded, { "encoding": "base64", "preflightCommitment": "confirmed" }]))
+        .await
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .ok_or_else(|| bad("Solana rejected the mint. The marketplace wallet may need devnet SOL."))?;
+    let mut confirmed = false;
+    for _ in 0..30 {
+        let status = rpc(&state, "getSignatureStatuses", json!([[signature]])).await?;
+        if let Some(entry) = status.pointer("/value/0").filter(|e| !e.is_null()) {
+            if !entry.get("err").is_some_and(Value::is_null) {
+                return Err(bad("The mint transaction failed on Solana."));
+            }
+            confirmed = matches!(entry.get("confirmationStatus").and_then(Value::as_str), Some("confirmed" | "finalized"));
+            if confirmed {
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    if !confirmed {
+        return Err(bad(format!("Mint sent but not confirmed yet. Signature {signature}")));
+    }
+    let mint_text = b58(&mint);
+    state
+        .market
+        .db()
+        .execute(
+            "INSERT INTO assets(mint, kind, name, reference, created_at) VALUES (?1,'character',?2,?3,?4)",
+            params![mint_text, format!("{} character", body.species), format!("species:{}", body.species), now_ms() as i64],
+        )
+        .map_err(db_err)?;
+    audit(&state, &admin.wallet, "market_mint_character", json!({ "mint": mint_text, "species": body.species, "recipient": body.recipient }));
+    Ok(Json(json!({ "mint": mint_text, "signature": signature })))
 }
 
 #[cfg(test)]
@@ -749,5 +860,25 @@ mod tests {
         ixs.push(transfer_checked_ix(&ata(&buyer, &gold), &gold, &ata(&seller, &gold), &buyer, 975, 6));
         ixs.push(transfer_checked_ix(&ata(&seller, &nft), &nft, &ata(&buyer, &nft), &market.delegate(), 1, 0));
         println!("TX={}", serialize(&market, &buyer, &ixs, &[3u8; 32]));
+    }
+
+    #[test]
+    #[ignore = "prints a signed mint transaction for devnet simulateTransaction"]
+    fn print_sample_mint() {
+        let market = Market::open(FsPath::new(":memory:"), &std::env::temp_dir().join("rh-test-key.hex")).unwrap();
+        let payer = market.delegate();
+        let mint_key = SigningKey::from_bytes(&[21u8; 32]);
+        let mint = mint_key.verifying_key().to_bytes();
+        let recipient = [22u8; 32];
+        let ixs = [
+            system_create_account_ix(&payer, &mint, 1_461_600, 82, &konst(SPL_TOKEN_PROGRAM)),
+            initialize_mint2_ix(&mint, &payer),
+            create_ata_ix(&payer, &recipient, &mint),
+            mint_to_ix(&mint, &ata(&recipient, &mint), &payer),
+            lock_supply_ix(&mint, &payer),
+        ];
+        let raw = sign_with(&[&market.key, &mint_key], &payer, &ixs, &[3u8; 32]);
+        println!("PAYER={}", b58(&payer));
+        println!("MINTTX={}", base64::engine::general_purpose::STANDARD.encode(raw));
     }
 }
