@@ -34,6 +34,8 @@
         <button role="tab" aria-selected="false" data-tab="activity" type="button">Activity</button>
         <button role="tab" aria-selected="false" data-tab="market" type="button">Market</button>
         <button role="tab" aria-selected="false" data-tab="support" type="button">Support</button>
+        <button role="tab" aria-selected="false" data-tab="server" type="button">Server</button>
+        <button role="tab" aria-selected="false" data-tab="server" type="button">Server</button>
       </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
 
@@ -116,6 +118,52 @@
         <div class="grid" style="align-items:start;margin-top:0">
           <div class="card"><h2>Tickets</h2><div class="list" id="support-tickets"><p class="muted">Select Support to load tickets.</p></div></div>
           <div class="card" id="support-detail"><p class="muted">Select a ticket to review and reply.</p></div>
+        </div>
+      </section>
+      <section data-panel="server" hidden>
+        <div class="grid" style="margin-top:0;align-items:start">
+          <div class="card">
+            <h2>Game server</h2>
+            <div class="stat"><span>Game</span><strong id="server-game-status">Checking…</strong></div>
+            <div class="stat"><span>Version</span><strong id="server-version">—</strong></div>
+            <div class="stat"><span>Authentication</span><strong id="server-auth-status">Checking…</strong></div>
+            <div class="toolbar" style="margin:18px 0 0">
+              <button class="btn gold" id="server-start" type="button">Start</button>
+              <button class="btn danger" id="server-stop" type="button">Stop</button>
+              <button class="btn quiet" id="server-restart" type="button">Restart</button>
+            </div>
+            <p class="muted">Stopping the game disconnects all active players. Authentication and the website remain online.</p>
+          </div>
+          <div class="card">
+            <div class="toolbar" style="justify-content:space-between">
+              <h2 style="margin:0">Latest server log</h2>
+              <button class="btn quiet small" id="server-logs-refresh" type="button">Refresh</button>
+            </div>
+            <pre id="server-logs" style="max-height:55vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;color:var(--ink)">Loading logs…</pre>
+          </div>
+        </div>
+      </section>
+      <section data-panel="server" hidden>
+        <div class="grid" style="margin-top:0;align-items:start">
+          <div class="card">
+            <h2>Game server</h2>
+            <div class="stat"><span>Game</span><strong id="server-game-status">Checking…</strong></div>
+            <div class="stat"><span>Version</span><strong id="server-version">—</strong></div>
+            <div class="stat"><span>Authentication</span><strong id="server-auth-status">Checking…</strong></div>
+            <div class="toolbar" style="margin:18px 0 0">
+              <button class="btn gold" id="server-start" type="button">Start</button>
+              <button class="btn danger" id="server-stop" type="button">Stop</button>
+              <button class="btn quiet" id="server-restart" type="button">Restart</button>
+            </div>
+            <p class="muted">Stopping the game disconnects active players. Authentication and the website remain online.</p>
+          </div>
+          <div class="card">
+            <div class="toolbar" style="justify-content:space-between">
+              <h2 style="margin:0">Latest server log</h2>
+              <button class="btn quiet small" id="server-logs-refresh" type="button">Refresh</button>
+            </div>
+            <pre id="server-logs" style="max-height:55vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;color:var(--ink)">Loading logs…</pre>
+          </div>
         </div>
       </section>
       <section data-panel="market" hidden>
@@ -214,6 +262,7 @@
   let members = [];
   let alphaOpen = false;
   let selectedSupportTicket = null;
+  let activeAdminTab = "overview";
 
   $("#gate-signin").addEventListener("click", async (event) => {
     event.target.disabled = true;
@@ -221,6 +270,7 @@
   });
 
   function showTab(name) {
+    activeAdminTab = name;
     document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
     document.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== name; });
     setMsg(msg, "");
@@ -229,6 +279,7 @@
     if (name === "activity") loadAudit();
     if (name === "market") loadMarket();
     if (name === "support") loadSupport();
+    if (name === "server") loadServer();
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 
@@ -312,6 +363,43 @@
 
   $("#support-filter").addEventListener("change", loadSupport);
   $("#support-refresh").addEventListener("click", loadSupport);
+
+  async function loadServer() {
+    try {
+      const status = await api("/api/v1/admin/server/status");
+      $("#server-game-status").textContent = status.online ? "Online" : "Offline";
+      $("#server-game-status").className = status.online ? "pill-ok" : "pill-no";
+      $("#server-auth-status").textContent = status.auth_online ? "Online" : "Offline";
+      $("#server-auth-status").className = status.auth_online ? "pill-ok" : "pill-no";
+      $("#server-version").textContent = status.version;
+      $("#server-start").disabled = status.online;
+      $("#server-stop").disabled = !status.online;
+      const log = await api("/api/v1/admin/server/logs?lines=250");
+      $("#server-logs").textContent = `${log.file}\n${log.lines.join("\n")}`;
+      const pre = $("#server-logs");
+      pre.scrollTop = pre.scrollHeight;
+    } catch (error) {
+      $("#server-logs").textContent = error.message;
+    }
+  }
+
+  async function serverAction(action) {
+    if ((action === "stop" || action === "restart") && !confirm(`${action === "stop" ? "Stop" : "Restart"} the game server? Active players will disconnect.`)) return;
+    const buttons = [$("#server-start"), $("#server-stop"), $("#server-restart")];
+    buttons.forEach((button) => { button.disabled = true; });
+    setMsg(msg, `${action[0].toUpperCase()}${action.slice(1)} requested…`);
+    try {
+      const result = await api("/api/v1/admin/server/control", { method: "POST", body: { action } });
+      setMsg(msg, result.message, "ok");
+    } catch (error) { setMsg(msg, error.message, "error"); }
+    finally { await loadServer(); }
+  }
+
+  $("#server-start").addEventListener("click", () => serverAction("start"));
+  $("#server-stop").addEventListener("click", () => serverAction("stop"));
+  $("#server-restart").addEventListener("click", () => serverAction("restart"));
+  $("#server-logs-refresh").addEventListener("click", loadServer);
+  setInterval(() => { if (activeAdminTab === "server" && !document.hidden) loadServer(); }, 10000);
 
   async function loadMarket() {
     const m = await run(() => api("/api/v1/admin/market"));

@@ -37,6 +37,7 @@ struct Config {
     support_db: PathBuf,
     admin_wallets: HashSet<String>,
     game_addr: String,
+    game_log_dir: PathBuf,
     rpc_url: String,
     vgld_mint: Option<String>,
     market_db: PathBuf,
@@ -65,6 +66,7 @@ impl Config {
                 .map(str::to_owned)
                 .collect(),
             game_addr: var("SITE_GAME_ADDR", "127.0.0.1:14004"),
+            game_log_dir: var("SITE_GAME_LOG_DIR", "userdata/server-cli/logs").into(),
             rpc_url: var("SITE_SOLANA_RPC_URL", "https://api.devnet.solana.com"),
             vgld_mint: std::env::var("SITE_VGLD_MINT").ok().filter(|mint| !mint.is_empty()),
             market_db: var("SITE_MARKET_DB", "market.db").into(),
@@ -77,6 +79,7 @@ impl Config {
     }
 }
 mod support;
+mod server_control;
 
 struct Challenge {
     wallet: String,
@@ -548,9 +551,9 @@ async fn main() {
         .route("/api/v1/market/listings/{id}/revoke", post(market::revoke))
         .route("/api/v1/market/owned", get(market::owned))
         .route("/api/v1/market/approve", post(market::prepare_approval))
-            .route("/api/v1/support/tickets", get(support::mine).post(support::create))
-            .route("/api/v1/support/tickets/{id}", get(support::detail))
-            .route("/api/v1/support/tickets/{id}/messages", post(support::player_reply))
+        .route("/api/v1/support/tickets", get(support::mine).post(support::create))
+        .route("/api/v1/support/tickets/{id}", get(support::detail))
+        .route("/api/v1/support/tickets/{id}/messages", post(support::player_reply))
         .route("/api/v1/game/deliveries", get(market::pending_deliveries))
         .route("/api/v1/game/entitlements/{wallet}", get(market::entitlements))
         .route("/api/v1/game/deliveries/{id}/ack", post(market::ack_delivery))
@@ -559,10 +562,13 @@ async fn main() {
         .route("/api/v1/admin/market/mint-character", post(market::mint_character))
         .route("/api/v1/admin/market/mint-land", post(market::mint_land))
         .route("/api/v1/admin/market/mint-building", post(market::mint_building))
-            .route("/api/v1/admin/support/tickets", get(support::admin_list))
-            .route("/api/v1/admin/support/tickets/{id}", get(support::admin_detail))
-            .route("/api/v1/admin/support/tickets/{id}/messages", post(support::admin_reply))
-            .route("/api/v1/admin/support/tickets/{id}/status", put(support::admin_status))
+        .route("/api/v1/admin/server/status", get(server_control::status))
+        .route("/api/v1/admin/server/control", post(server_control::control))
+        .route("/api/v1/admin/server/logs", get(server_control::logs))
+        .route("/api/v1/admin/support/tickets", get(support::admin_list))
+        .route("/api/v1/admin/support/tickets/{id}", get(support::admin_detail))
+        .route("/api/v1/admin/support/tickets/{id}/messages", post(support::admin_reply))
+        .route("/api/v1/admin/support/tickets/{id}/status", put(support::admin_status))
         .route("/api/v1/admin/overview", get(admin::overview))
         .route("/api/v1/admin/members", get(admin::members).post(admin::add))
         .route("/api/v1/admin/members/{wallet}", put(admin::update).delete(admin::remove))
