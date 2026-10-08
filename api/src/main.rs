@@ -30,6 +30,7 @@ const CHALLENGE_TTL_MS: u128 = 5 * 60 * 1000;
 struct Config {
     game_db: PathBuf,
     parcels_path: PathBuf,
+    buildings_path: PathBuf,
     alpha_access_path: PathBuf,
     members_path: PathBuf,
     audit_path: PathBuf,
@@ -51,6 +52,7 @@ impl Config {
         Self {
             game_db: var("SITE_GAME_DB", "userdata/server/saves/db.sqlite").into(),
             parcels_path: var("SITE_PARCELS_PATH", "userdata/server/property_parcels.json").into(),
+            buildings_path: var("SITE_BUILDINGS_PATH", "userdata/server/property_buildings.json").into(),
             alpha_access_path: var("SITE_ALPHA_ACCESS_PATH", "alpha-access.json").into(),
             members_path: var("SITE_MEMBERS_PATH", "alpha-members.json").into(),
             audit_path: var("SITE_AUDIT_PATH", "admin-audit.jsonl").into(),
@@ -547,6 +549,7 @@ async fn main() {
         .route("/api/v1/admin/market/assets", post(market::register_asset))
         .route("/api/v1/admin/market/mint-character", post(market::mint_character))
         .route("/api/v1/admin/market/mint-land", post(market::mint_land))
+        .route("/api/v1/admin/market/mint-building", post(market::mint_building))
         .route("/api/v1/admin/overview", get(admin::overview))
         .route("/api/v1/admin/members", get(admin::members).post(admin::add))
         .route("/api/v1/admin/members/{wallet}", put(admin::update).delete(admin::remove))

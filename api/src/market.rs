@@ -367,6 +367,9 @@ async fn held_nfts(state: &AppState, wallet: &str) -> Result<Vec<(String, bool)>
 }
 
 const SPECIES: [&str; 5] = ["Danari", "Dwarf", "Elf", "Orc", "Draugr"];
+const BUILDING_TYPES: [&str; 11] = [
+    "house", "shop", "inn", "blacksmith", "guild_hall", "farmhouse", "barn", "stable", "castle", "fortress", "town_hall",
+];
 
 /// Humanoid species the wallet may play, from the character NFTs it holds. Human is free and not listed.
 pub async fn entitlements(State(state): State<AppState>, headers: HeaderMap, Path(wallet): Path<String>) -> ApiResult {
@@ -702,6 +705,10 @@ pub async fn market_info(State(state): State<AppState>, headers: HeaderMap) -> A
             })
         })
         .collect();
+    let buildings: Vec<Value> = fs::read(&state.cfg.buildings_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default();
     Ok(Json(json!({
         "delegate": b58(&state.market.delegate()),
         "sol_lamports": sol_lamports,
@@ -714,6 +721,7 @@ pub async fn market_info(State(state): State<AppState>, headers: HeaderMap) -> A
         "game_delivery_enabled": state.cfg.game_key.is_some(),
         "characters": characters,
         "parcels": land_parcels,
+        "buildings": buildings,
     })))
 }
 
@@ -810,6 +818,35 @@ fn save_parcels(state: &AppState, parcels: &[Value]) -> Result<(), ApiError> {
     Err(bad("Could not update the parcel registry. The land NFT is minted; contact an admin with its mint address."))
 }
 
+fn save_buildings(state: &AppState, buildings: &[Value]) -> Result<(), ApiError> {
+    let path = &state.cfg.buildings_path;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|_| bad("Could not create the building registry directory."))?;
+    }
+    let temp = path.with_extension("tmp");
+    let bytes = serde_json::to_vec_pretty(buildings)
+        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Could not serialize building registry."))?;
+    fs::write(&temp, bytes).map_err(|_| bad("Could not write the building registry."))?;
+    for attempt in 0..8 {
+        if fs::rename(&temp, path).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(40 * (attempt + 1)));
+    }
+    let _ = fs::remove_file(&temp);
+    Err(bad("Could not update the building registry. The NFT is minted; contact an admin with its mint address."))
+}
+
+fn load_buildings(path: &FsPath) -> Result<Vec<Value>, ApiError> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(_) => return Err(bad("Could not read the building registry.")),
+    };
+    serde_json::from_slice(&bytes)
+        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "The building registry is invalid; refusing to overwrite it."))
+}
+
 #[derive(Deserialize)]
 pub struct MintCharacterBody {
     species: String,
@@ -861,9 +898,46 @@ pub async fn mint_land(State(state): State<AppState>, headers: HeaderMap, Json(b
     Ok(Json(json!({ "mint": mint, "signature": signature, "parcel_id": body.parcel_id })))
 }
 
+#[derive(Deserialize)]
+pub struct MintBuildingBody {
+    building_type: String,
+    recipient: String,
+}
+
+pub async fn mint_building(State(state): State<AppState>, headers: HeaderMap, Json(body): Json<MintBuildingBody>) -> ApiResult {
+    let admin = admin_session(&headers, &state)?;
+    if !BUILDING_TYPES.contains(&body.building_type.as_str()) {
+        return Err(bad("Choose a supported building type."));
+    }
+    let recipient = key(&body.recipient)?;
+    let (mint, signature) = mint_one_of_one(&state, &recipient).await?;
+    let mut buildings = load_buildings(&state.cfg.buildings_path)?;
+    buildings.push(json!({ "mint": mint, "building_type": body.building_type }));
+    save_buildings(&state, &buildings)?;
+    state
+        .market
+        .db()
+        .execute(
+            "INSERT INTO assets(mint, kind, name, reference, created_at) VALUES (?1,'item',?2,?3,?4)",
+            params![mint, format!("{} building", body.building_type.replace('_', " ")), format!("building:{}", body.building_type), now_ms() as i64],
+        )
+        .map_err(db_err)?;
+    audit(&state, &admin.wallet, "market_mint_building", json!({ "mint": mint, "building_type": body.building_type, "recipient": body.recipient }));
+    Ok(Json(json!({ "mint": mint, "signature": signature, "building_type": body.building_type })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn corrupt_building_registry_is_not_silently_reset() {
+        let path = std::env::temp_dir().join(format!("rh-buildings-{}.json", rand::random::<u64>()));
+        assert!(load_buildings(&path).unwrap().is_empty());
+        fs::write(&path, b"not json").unwrap();
+        assert!(load_buildings(&path).is_err());
+        let _ = fs::remove_file(path);
+    }
 
     #[test]
     fn compact_encoding() {

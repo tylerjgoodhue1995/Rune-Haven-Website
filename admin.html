@@ -137,6 +137,17 @@
           <div class="list" id="m-parcels" style="margin-top:16px"><p class="muted">Loading parcels…</p></div>
         </div>
         <div class="card" style="margin-top:18px">
+          <h2>Mint a building NFT</h2>
+          <p class="muted">The building stays in the owner’s wallet. The game checks that the NFT belongs to the player and that its type is allowed on the selected parcel.</p>
+          <form class="form-grid" id="building-mint-form" style="grid-template-columns:1fr 2fr auto">
+            <div><label class="field" for="building-type">Building type</label>
+              <select class="text" id="building-type"><option value="house">House</option><option value="farmhouse">Farmhouse</option><option value="barn">Barn</option><option value="stable">Stable</option><option value="shop">Shop</option><option value="inn">Inn</option><option value="blacksmith">Blacksmith</option><option value="guild_hall">Guild hall</option><option value="castle">Castle</option><option value="fortress">Fortress</option><option value="town_hall">Town hall</option></select></div>
+            <div><label class="field" for="building-recipient">Send to wallet</label><input class="text" id="building-recipient" autocomplete="off" spellcheck="false" required></div>
+            <button class="btn" type="submit">Mint building NFT</button>
+          </form>
+          <div class="list" id="m-buildings" style="margin-top:16px"><p class="muted">Loading buildings…</p></div>
+        </div>
+        <div class="card" style="margin-top:18px">
           <h2>Minted characters</h2>
           <div class="list" id="m-characters"><p class="muted">None yet.</p></div>
         </div>
@@ -243,6 +254,14 @@
       row.innerHTML = `<span><strong>${esc(parcel.region)} · ${esc(parcel.land_type)}</strong><br><span class="muted">${esc(parcel.world_id)} · ${esc(parcel.id)}</span></span><code>${parcel.minted ? esc(short(parcel.mint)) : "Not minted"}</code>`;
       landBox.appendChild(row);
     }
+    const buildingBox = $("#m-buildings");
+    buildingBox.innerHTML = m.buildings.length ? "" : '<p class="muted">No building NFTs have been minted.</p>';
+    for (const building of m.buildings) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `<span><strong>${esc(RH.prettyItem(building.building_type))}</strong></span><code>${esc(short(building.mint))}</code>`;
+      buildingBox.appendChild(row);
+    }
   }
 
   $("#mint-form").addEventListener("submit", async (event) => {
@@ -261,6 +280,16 @@
     button.disabled = true;
     setMsg(msg, "Minting parcel NFT on Solana…");
     const result = await run(() => api("/api/v1/admin/market/mint-land", { method: "POST", body: { parcel_id: $("#land-parcel").value, recipient: $("#land-recipient").value.trim() } }), (r) => `Parcel NFT minted for ${r.parcel_id}: ${short(r.mint)}.`);
+    button.disabled = false;
+    if (result) loadMarket();
+  });
+
+  $("#building-mint-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    setMsg(msg, "Minting building NFT on Solana…");
+    const result = await run(() => api("/api/v1/admin/market/mint-building", { method: "POST", body: { building_type: $("#building-type").value, recipient: $("#building-recipient").value.trim() } }), (r) => `Minted ${RH.prettyItem(r.building_type)} building ${short(r.mint)}.`);
     button.disabled = false;
     if (result) loadMarket();
   });
