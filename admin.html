@@ -35,7 +35,6 @@
         <button role="tab" aria-selected="false" data-tab="market" type="button">Market</button>
         <button role="tab" aria-selected="false" data-tab="support" type="button">Support</button>
         <button role="tab" aria-selected="false" data-tab="server" type="button">Server</button>
-        <button role="tab" aria-selected="false" data-tab="server" type="button">Server</button>
       </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
 
@@ -133,29 +132,6 @@
               <button class="btn quiet" id="server-restart" type="button">Restart</button>
             </div>
             <p class="muted">Stopping the game disconnects all active players. Authentication and the website remain online.</p>
-          </div>
-          <div class="card">
-            <div class="toolbar" style="justify-content:space-between">
-              <h2 style="margin:0">Latest server log</h2>
-              <button class="btn quiet small" id="server-logs-refresh" type="button">Refresh</button>
-            </div>
-            <pre id="server-logs" style="max-height:55vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;color:var(--ink)">Loading logs…</pre>
-          </div>
-        </div>
-      </section>
-      <section data-panel="server" hidden>
-        <div class="grid" style="margin-top:0;align-items:start">
-          <div class="card">
-            <h2>Game server</h2>
-            <div class="stat"><span>Game</span><strong id="server-game-status">Checking…</strong></div>
-            <div class="stat"><span>Version</span><strong id="server-version">—</strong></div>
-            <div class="stat"><span>Authentication</span><strong id="server-auth-status">Checking…</strong></div>
-            <div class="toolbar" style="margin:18px 0 0">
-              <button class="btn gold" id="server-start" type="button">Start</button>
-              <button class="btn danger" id="server-stop" type="button">Stop</button>
-              <button class="btn quiet" id="server-restart" type="button">Restart</button>
-            </div>
-            <p class="muted">Stopping the game disconnects active players. Authentication and the website remain online.</p>
           </div>
           <div class="card">
             <div class="toolbar" style="justify-content:space-between">

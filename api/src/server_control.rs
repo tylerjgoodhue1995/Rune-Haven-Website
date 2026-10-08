@@ -19,6 +19,21 @@ use crate::{ApiError, ApiResult, AppState, admin::{self, admin_session}, game_on
 
 fn fail(status: StatusCode, message: impl Into<String>) -> ApiError { ApiError::new(status, message) }
 
+fn normalize_log_line(line: &str) -> &str {
+    let Some(end) = line.find("] ") else { return line };
+    let rest = &line[end + 2..];
+    let bytes = rest.as_bytes();
+    if bytes.len() >= 11
+        && bytes.get(4) == Some(&b'-')
+        && bytes.get(7) == Some(&b'-')
+        && bytes.get(10) == Some(&b'T')
+    {
+        rest
+    } else {
+        line
+    }
+}
+
 fn control_lock() -> &'static tokio::sync::Mutex<()> {
     static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
@@ -139,9 +154,31 @@ pub async fn logs(State(state): State<AppState>, headers: axum::http::HeaderMap,
     files.sort_by_key(|path| fs::metadata(path).and_then(|metadata| metadata.modified()).ok());
     let path: PathBuf = files.pop().ok_or_else(|| fail(StatusCode::NOT_FOUND, "No game logs yet. Start the server to create a log."))?;
     let content = fs::read_to_string(&path).map_err(|_| fail(StatusCode::INTERNAL_SERVER_ERROR, "Could not read the game log."))?;
-    let lines: Vec<&str> = content.lines().rev().take(limit).collect::<Vec<_>>().into_iter().rev().collect();
+    let lines: Vec<&str> = content
+        .lines()
+        .rev()
+        .take(limit)
+        .map(normalize_log_line)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
     Ok(Json(json!({
         "file": path.file_name().and_then(|name| name.to_str()).unwrap_or_default(),
         "lines": lines,
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_log_line;
+
+    #[test]
+    fn strips_only_duplicate_launcher_timestamps() {
+        assert_eq!(
+            normalize_log_line("[2026-10-08 03:16:16.661Z] 2026-10-08T03:16:16.661908Z INFO server ready"),
+            "2026-10-08T03:16:16.661908Z INFO server ready"
+        );
+        assert_eq!(normalize_log_line("plain log line"), "plain log line");
+    }
 }
