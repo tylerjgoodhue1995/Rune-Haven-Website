@@ -127,6 +127,16 @@
           </div>
         </div>
         <div class="card" style="margin-top:18px">
+          <h2>Mint a land parcel NFT</h2>
+          <p class="muted">Each NFT is permanently mapped to one surveyed plot. The owner chooses a build location inside that plot; the plot itself cannot move.</p>
+          <form class="form-grid" id="land-mint-form" style="grid-template-columns:1fr 2fr auto">
+            <div><label class="field" for="land-parcel">Parcel</label><select class="text" id="land-parcel" required></select></div>
+            <div><label class="field" for="land-recipient">Send to wallet</label><input class="text" id="land-recipient" autocomplete="off" spellcheck="false" required></div>
+            <button class="btn" type="submit">Mint parcel NFT</button>
+          </form>
+          <div class="list" id="m-parcels" style="margin-top:16px"><p class="muted">Loading parcels…</p></div>
+        </div>
+        <div class="card" style="margin-top:18px">
           <h2>Minted characters</h2>
           <div class="list" id="m-characters"><p class="muted">None yet.</p></div>
         </div>
@@ -216,6 +226,23 @@
       row.innerHTML = `<span><strong>${esc(c.name)}</strong><br><span class="muted">${esc(c.reference)}</span></span><code>${esc(short(c.mint))}</code>`;
       box.appendChild(row);
     }
+    const available = m.parcels.filter((parcel) => !parcel.minted);
+    const select = $("#land-parcel");
+    select.replaceChildren(...available.map((parcel) => {
+      const option = document.createElement("option");
+      option.value = parcel.id;
+      option.textContent = `${parcel.region} · ${parcel.land_type} · ${parcel.id}`;
+      return option;
+    }));
+    $("#land-mint-form").querySelector("button[type=submit]").disabled = !available.length;
+    const landBox = $("#m-parcels");
+    landBox.innerHTML = m.parcels.length ? "" : '<p class="muted">No parcels are configured.</p>';
+    for (const parcel of m.parcels) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `<span><strong>${esc(parcel.region)} · ${esc(parcel.land_type)}</strong><br><span class="muted">${esc(parcel.world_id)} · ${esc(parcel.id)}</span></span><code>${parcel.minted ? esc(short(parcel.mint)) : "Not minted"}</code>`;
+      landBox.appendChild(row);
+    }
   }
 
   $("#mint-form").addEventListener("submit", async (event) => {
@@ -224,6 +251,16 @@
     button.disabled = true;
     setMsg(msg, "Minting on Solana�");
     const result = await run(() => api("/api/v1/admin/market/mint-character", { method: "POST", body: { species: $("#mint-species").value, recipient: $("#mint-recipient").value.trim() } }), (r) => `Minted ${short(r.mint)}.`);
+    button.disabled = false;
+    if (result) loadMarket();
+  });
+
+  $("#land-mint-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    setMsg(msg, "Minting parcel NFT on Solana…");
+    const result = await run(() => api("/api/v1/admin/market/mint-land", { method: "POST", body: { parcel_id: $("#land-parcel").value, recipient: $("#land-recipient").value.trim() } }), (r) => `Parcel NFT minted for ${r.parcel_id}: ${short(r.mint)}.`);
     button.disabled = false;
     if (result) loadMarket();
   });

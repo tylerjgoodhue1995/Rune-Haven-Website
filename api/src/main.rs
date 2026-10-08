@@ -546,6 +546,7 @@ async fn main() {
         .route("/api/v1/admin/market", get(market::market_info))
         .route("/api/v1/admin/market/assets", post(market::register_asset))
         .route("/api/v1/admin/market/mint-character", post(market::mint_character))
+        .route("/api/v1/admin/market/mint-land", post(market::mint_land))
         .route("/api/v1/admin/overview", get(admin::overview))
         .route("/api/v1/admin/members", get(admin::members).post(admin::add))
         .route("/api/v1/admin/members/{wallet}", put(admin::update).delete(admin::remove))

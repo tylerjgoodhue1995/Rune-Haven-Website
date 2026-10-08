@@ -688,6 +688,20 @@ pub async fn market_info(State(state): State<AppState>, headers: HeaderMap) -> A
                 .collect::<rusqlite::Result<Vec<_>>>()
         })
         .unwrap_or_default();
+    let land_parcels: Vec<Value> = parcels(&state)
+        .into_iter()
+        .map(|parcel| {
+            let mint = parcel.get("land_nft_id").and_then(Value::as_str).unwrap_or_default();
+            json!({
+                "id": parcel.get("id").and_then(Value::as_str).unwrap_or_default(),
+                "region": parcel.get("region").and_then(Value::as_str).unwrap_or_default(),
+                "land_type": parcel.get("land_type").and_then(Value::as_str).unwrap_or_default(),
+                "world_id": parcel.get("world_id").and_then(Value::as_str).unwrap_or_default(),
+                "mint": mint,
+                "minted": valid_wallet(mint),
+            })
+        })
+        .collect();
     Ok(Json(json!({
         "delegate": b58(&state.market.delegate()),
         "sol_lamports": sol_lamports,
@@ -699,6 +713,7 @@ pub async fn market_info(State(state): State<AppState>, headers: HeaderMap) -> A
         "pending_deliveries": count("SELECT COUNT(*) FROM deliveries WHERE status = 'pending'"),
         "game_delivery_enabled": state.cfg.game_key.is_some(),
         "characters": characters,
+        "parcels": land_parcels,
     })))
 }
 
@@ -742,6 +757,59 @@ fn sign_with(keys: &[&SigningKey], payer: &Key, instructions: &[Ix], blockhash: 
     tx
 }
 
+async fn mint_one_of_one(state: &AppState, recipient: &Key) -> Result<(String, String), ApiError> {
+    let payer = state.market.delegate();
+    let mint_key = SigningKey::from_bytes(&rand::random());
+    let mint = mint_key.verifying_key().to_bytes();
+    let rent = rpc(state, "getMinimumBalanceForRentExemption", json!([82]))
+        .await?
+        .as_u64()
+        .ok_or_else(|| ApiError::bad_gateway("Could not read the rent amount."))?;
+    let ixs = [
+        system_create_account_ix(&payer, &mint, rent, 82, &konst(SPL_TOKEN_PROGRAM)),
+        initialize_mint2_ix(&mint, &payer),
+        create_ata_ix(&payer, recipient, &mint),
+        mint_to_ix(&mint, &ata(recipient, &mint), &payer),
+        lock_supply_ix(&mint, &payer),
+    ];
+    let raw = sign_with(&[&state.market.key, &mint_key], &payer, &ixs, &blockhash(state).await?);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
+    let signature = rpc(state, "sendTransaction", json!([encoded, { "encoding": "base64", "preflightCommitment": "confirmed" }]))
+        .await?
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| bad("Solana rejected the mint. The marketplace wallet may need devnet SOL."))?;
+    for _ in 0..30 {
+        let status = rpc(state, "getSignatureStatuses", json!([[signature]])).await?;
+        if let Some(entry) = status.pointer("/value/0").filter(|e| !e.is_null()) {
+            if !entry.get("err").is_some_and(Value::is_null) {
+                return Err(bad("The mint transaction failed on Solana."));
+            }
+            if matches!(entry.get("confirmationStatus").and_then(Value::as_str), Some("confirmed" | "finalized")) {
+                return Ok((b58(&mint), signature));
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+    Err(bad(format!("Mint sent but not confirmed yet. Signature {signature}")))
+}
+
+fn save_parcels(state: &AppState, parcels: &[Value]) -> Result<(), ApiError> {
+    let path = &state.cfg.parcels_path;
+    let temp = path.with_extension("tmp");
+    let bytes = serde_json::to_vec_pretty(parcels)
+        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Could not serialize parcel registry."))?;
+    fs::write(&temp, bytes).map_err(|_| bad("Could not write the parcel registry."))?;
+    for attempt in 0..8 {
+        if fs::rename(&temp, path).is_ok() {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(40 * (attempt + 1)));
+    }
+    let _ = fs::remove_file(&temp);
+    Err(bad("Could not update the parcel registry. The land NFT is minted; contact an admin with its mint address."))
+}
+
 #[derive(Deserialize)]
 pub struct MintCharacterBody {
     species: String,
@@ -755,42 +823,7 @@ pub async fn mint_character(State(state): State<AppState>, headers: HeaderMap, J
         return Err(bad("Species must be Danari, Dwarf, Elf, Orc or Draugr."));
     }
     let recipient = key(&body.recipient)?;
-    let payer = state.market.delegate();
-    let mint_key = SigningKey::from_bytes(&rand::random());
-    let mint = mint_key.verifying_key().to_bytes();
-    let rent = rpc(&state, "getMinimumBalanceForRentExemption", json!([82])).await?.as_u64().ok_or_else(|| ApiError::bad_gateway("Could not read the rent amount."))?;
-    let ixs = [
-        system_create_account_ix(&payer, &mint, rent, 82, &konst(SPL_TOKEN_PROGRAM)),
-        initialize_mint2_ix(&mint, &payer),
-        create_ata_ix(&payer, &recipient, &mint),
-        mint_to_ix(&mint, &ata(&recipient, &mint), &payer),
-        lock_supply_ix(&mint, &payer),
-    ];
-    let raw = sign_with(&[&state.market.key, &mint_key], &payer, &ixs, &blockhash(&state).await?);
-    let encoded = base64::engine::general_purpose::STANDARD.encode(raw);
-    let signature = rpc(&state, "sendTransaction", json!([encoded, { "encoding": "base64", "preflightCommitment": "confirmed" }]))
-        .await
-        .ok()
-        .and_then(|v| v.as_str().map(str::to_owned))
-        .ok_or_else(|| bad("Solana rejected the mint. The marketplace wallet may need devnet SOL."))?;
-    let mut confirmed = false;
-    for _ in 0..30 {
-        let status = rpc(&state, "getSignatureStatuses", json!([[signature]])).await?;
-        if let Some(entry) = status.pointer("/value/0").filter(|e| !e.is_null()) {
-            if !entry.get("err").is_some_and(Value::is_null) {
-                return Err(bad("The mint transaction failed on Solana."));
-            }
-            confirmed = matches!(entry.get("confirmationStatus").and_then(Value::as_str), Some("confirmed" | "finalized"));
-            if confirmed {
-                break;
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    }
-    if !confirmed {
-        return Err(bad(format!("Mint sent but not confirmed yet. Signature {signature}")));
-    }
-    let mint_text = b58(&mint);
+    let (mint_text, signature) = mint_one_of_one(&state, &recipient).await?;
     state
         .market
         .db()
@@ -801,6 +834,31 @@ pub async fn mint_character(State(state): State<AppState>, headers: HeaderMap, J
         .map_err(db_err)?;
     audit(&state, &admin.wallet, "market_mint_character", json!({ "mint": mint_text, "species": body.species, "recipient": body.recipient }));
     Ok(Json(json!({ "mint": mint_text, "signature": signature })))
+}
+
+#[derive(Deserialize)]
+pub struct MintLandBody {
+    parcel_id: String,
+    recipient: String,
+}
+
+pub async fn mint_land(State(state): State<AppState>, headers: HeaderMap, Json(body): Json<MintLandBody>) -> ApiResult {
+    let admin = admin_session(&headers, &state)?;
+    let recipient = key(&body.recipient)?;
+    let mut parcels = parcels(&state);
+    let parcel = parcels
+        .iter_mut()
+        .find(|parcel| parcel.get("id").and_then(Value::as_str) == Some(body.parcel_id.as_str()))
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "Parcel not found."))?;
+    let current_mint = parcel.get("land_nft_id").and_then(Value::as_str).unwrap_or_default();
+    if valid_wallet(current_mint) {
+        return Err(bad("This parcel already has a land NFT."));
+    }
+    let (mint, signature) = mint_one_of_one(&state, &recipient).await?;
+    parcel["land_nft_id"] = Value::String(mint.clone());
+    save_parcels(&state, &parcels)?;
+    audit(&state, &admin.wallet, "market_mint_land", json!({ "mint": mint, "parcel_id": body.parcel_id, "recipient": body.recipient }));
+    Ok(Json(json!({ "mint": mint, "signature": signature, "parcel_id": body.parcel_id })))
 }
 
 #[cfg(test)]
