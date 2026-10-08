@@ -33,6 +33,7 @@
         <button role="tab" aria-selected="false" data-tab="lookup" type="button">Lookup</button>
         <button role="tab" aria-selected="false" data-tab="activity" type="button">Activity</button>
         <button role="tab" aria-selected="false" data-tab="market" type="button">Market</button>
+        <button role="tab" aria-selected="false" data-tab="support" type="button">Support</button>
       </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
 
@@ -102,6 +103,19 @@
               <tbody id="audit"><tr><td colspan="3" class="muted">Loading…</td></tr></tbody>
             </table>
           </div>
+        </div>
+      </section>
+      <section data-panel="support" hidden>
+        <div class="toolbar">
+          <label class="field" for="support-filter" style="margin:0">Queue</label>
+          <select class="text" id="support-filter" style="width:170px">
+            <option value="">All tickets</option><option value="open">Open</option><option value="waiting">Waiting</option><option value="closed">Closed</option>
+          </select>
+          <button class="btn quiet small" id="support-refresh" type="button">Refresh</button>
+        </div>
+        <div class="grid" style="align-items:start;margin-top:0">
+          <div class="card"><h2>Tickets</h2><div class="list" id="support-tickets"><p class="muted">Select Support to load tickets.</p></div></div>
+          <div class="card" id="support-detail"><p class="muted">Select a ticket to review and reply.</p></div>
         </div>
       </section>
       <section data-panel="market" hidden>
@@ -183,7 +197,7 @@
   </form>
 </dialog>
 
-<script src="/site.js?v=20261007d"></script>
+<script src="/site.js?v=20261008a"></script>
 <script>
   const { $, esc, api, shell, signIn, setMsg, short, fmtUnits } = RH;
   shell("/admin.html");
@@ -199,6 +213,7 @@
   const msg = $("#msg");
   let members = [];
   let alphaOpen = false;
+  let selectedSupportTicket = null;
 
   $("#gate-signin").addEventListener("click", async (event) => {
     event.target.disabled = true;
@@ -213,6 +228,7 @@
     if (name === "members") loadMembers();
     if (name === "activity") loadAudit();
     if (name === "market") loadMarket();
+    if (name === "support") loadSupport();
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 
@@ -220,6 +236,82 @@
     try { const result = await job(); if (okText) setMsg(msg, okText(result), "ok"); return result; }
     catch (error) { setMsg(msg, error.message, "error"); return null; }
   };
+
+  async function loadSupport() {
+    const status = $("#support-filter").value;
+    const box = $("#support-tickets");
+    try {
+      const { tickets } = await api(`/api/v1/admin/support/tickets${status ? `?status=${status}` : ""}`);
+      box.replaceChildren();
+      if (!tickets.length) { box.innerHTML = '<p class="muted">No tickets in this queue.</p>'; return; }
+      for (const ticket of tickets) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "row";
+        button.style.cssText = "width:100%;text-align:left;color:var(--ink);cursor:pointer";
+        button.innerHTML = `<span><strong>#${ticket.id} · ${esc(ticket.subject)}</strong><br><span class="muted">${esc(ticket.category)} · ${esc(short(ticket.wallet))} · ${esc(when(ticket.updated_at))}</span></span><span class="tag">${esc(ticket.status)}</span>`;
+        button.addEventListener("click", () => openSupportTicket(ticket.id));
+        box.appendChild(button);
+      }
+      if (selectedSupportTicket && tickets.some((ticket) => ticket.id === selectedSupportTicket)) openSupportTicket(selectedSupportTicket);
+    } catch (error) { box.innerHTML = `<p class="muted">${esc(error.message)}</p>`; }
+  }
+
+  async function openSupportTicket(id) {
+    selectedSupportTicket = id;
+    const box = $("#support-detail");
+    try {
+      const { ticket, messages } = await api(`/api/v1/admin/support/tickets/${id}`);
+      box.innerHTML = `<h2>${esc(ticket.subject)}</h2>
+        <p class="muted">#${ticket.id} · ${esc(ticket.category)} · ${esc(ticket.wallet)} · Opened ${esc(when(ticket.created_at))}</p>
+        <div class="list" id="support-thread" style="max-height:42vh;overflow:auto"></div>
+        <form id="support-reply-form" style="margin-top:16px">
+          <label class="field" for="support-reply">Reply</label><textarea id="support-reply" maxlength="5000" required style="min-height:100px"></textarea>
+          <div class="toolbar" style="justify-content:space-between;margin:12px 0 0">
+            <div class="toolbar" style="margin:0"><select class="text" id="support-status" style="width:150px"><option value="open">Open</option><option value="waiting">Waiting</option><option value="closed">Closed</option></select><button class="btn quiet small" id="support-status-save" type="button">Update status</button></div>
+            <button class="btn gold" type="submit">Send reply</button>
+          </div>
+        </form>`;
+      $("#support-status").value = ticket.status;
+      const thread = $("#support-thread");
+      for (const entry of messages) {
+        const card = document.createElement("article");
+        card.className = "row";
+        card.style.cssText = "display:block;white-space:pre-wrap;overflow-wrap:anywhere";
+        const author = document.createElement("strong");
+        author.textContent = `${entry.role === "admin" ? "Support" : short(entry.wallet)} · ${when(entry.created_at)}`;
+        const text = document.createElement("p");
+        text.style.cssText = "margin:8px 0 0;color:var(--ink)";
+        text.textContent = entry.body;
+        card.append(author, text);
+        thread.appendChild(card);
+      }
+      $("#support-reply-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const button = event.submitter;
+        button.disabled = true;
+        try {
+          await api(`/api/v1/admin/support/tickets/${id}/messages`, { method: "POST", body: { message: $("#support-reply").value } });
+          await loadSupport();
+          openSupportTicket(id);
+        } catch (error) { setMsg(msg, error.message, "error"); }
+        finally { button.disabled = false; }
+      });
+      $("#support-status-save").addEventListener("click", async (event) => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+          await api(`/api/v1/admin/support/tickets/${id}/status`, { method: "PUT", body: { status: $("#support-status").value } });
+          setMsg(msg, `Ticket #${id} updated.`, "ok");
+          loadSupport();
+        } catch (error) { setMsg(msg, error.message, "error"); }
+        finally { button.disabled = false; }
+      });
+    } catch (error) { box.innerHTML = `<p class="muted">${esc(error.message)}</p>`; }
+  }
+
+  $("#support-filter").addEventListener("change", loadSupport);
+  $("#support-refresh").addEventListener("click", loadSupport);
 
   async function loadMarket() {
     const m = await run(() => api("/api/v1/admin/market"));

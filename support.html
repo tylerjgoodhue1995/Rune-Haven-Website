@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#12070d">
+<title>Support | Rune Haven</title>
+<link rel="stylesheet" href="/site.css?v=20261007d">
+</head>
+<body>
+<div class="world" aria-hidden="true"></div>
+<div class="shell">
+  <header class="top" id="top"></header>
+  <main class="wrap">
+    <p class="eyebrow">Adventurer services</p>
+    <h1>Support desk</h1>
+    <p class="lead">Open a request with the Rune Haven team and follow replies here.</p>
+    <div class="card gate" style="margin-top:26px;max-width:520px">
+      <h2>Sign in required</h2>
+      <p class="muted">Connect your wallet to create and track requests.</p>
+      <button class="btn block" id="gate-signin" type="button">Connect Phantom</button>
+    </div>
+    <div class="app">
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+      <div class="grid" style="align-items:start">
+        <section class="card">
+          <h2>Open a ticket</h2>
+          <form id="ticket-form">
+            <label class="field" for="category">Category</label>
+            <select class="text" id="category" required>
+              <option value="gameplay">Gameplay</option>
+              <option value="account">Account and access</option>
+              <option value="billing">Marketplace and VGLD</option>
+              <option value="bug">Bug report</option>
+              <option value="other">Other</option>
+            </select>
+            <label class="field" for="subject">Subject</label>
+            <input class="text" id="subject" maxlength="120" required>
+            <label class="field" for="message">What happened?</label>
+            <textarea id="message" maxlength="5000" required style="min-height:170px"></textarea>
+            <div class="toolbar" style="justify-content:flex-end;margin:16px 0 0">
+              <button class="btn gold" type="submit">Send ticket</button>
+            </div>
+          </form>
+        </section>
+        <section class="card">
+          <div class="toolbar" style="justify-content:space-between">
+            <h2 style="margin:0">My tickets</h2>
+            <button class="btn quiet small" id="refresh" type="button">Refresh</button>
+          </div>
+          <div class="list" id="tickets"><p class="muted">Loading tickets…</p></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="bottom" id="bottom"></footer>
+</div>
+
+<dialog id="ticket-dialog" aria-labelledby="ticket-title" style="max-width:720px">
+  <h2 id="ticket-title"></h2>
+  <p class="muted" id="ticket-meta"></p>
+  <div class="list" id="thread" style="max-height:48vh;overflow:auto"></div>
+  <form id="reply-form" style="margin-top:18px">
+    <label class="field" for="reply">Reply</label>
+    <textarea id="reply" maxlength="5000" required style="min-height:110px"></textarea>
+    <div class="toolbar" style="justify-content:flex-end;margin:12px 0 0">
+      <button class="btn quiet" id="ticket-close" type="button">Close</button>
+      <button class="btn gold" type="submit">Send reply</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/site.js?v=20261008a"></script>
+<script>
+  const { $, esc, api, shell, guard, signIn, setMsg } = RH;
+  shell("/support.html");
+  const msg = $("#msg");
+  const dialog = $("#ticket-dialog");
+  let selectedTicket = null;
+  const date = (value) => new Date(Number(value)).toLocaleString();
+
+  $("#gate-signin").addEventListener("click", async (event) => {
+    event.target.disabled = true;
+    try { await signIn(); location.reload(); }
+    catch (error) { RH.toast(error.message); event.target.disabled = false; }
+  });
+
+  async function loadTickets() {
+    const box = $("#tickets");
+    try {
+      const { tickets } = await api("/api/v1/support/tickets");
+      if (!tickets.length) { box.innerHTML = '<p class="muted">No tickets yet.</p>'; return; }
+      box.replaceChildren();
+      for (const ticket of tickets) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "row";
+        button.style.cssText = "width:100%;text-align:left;color:var(--ink);cursor:pointer";
+        button.innerHTML = `<span><strong>${esc(ticket.subject)}</strong><br><span class="muted">#${ticket.id} · ${esc(ticket.category)} · ${esc(date(ticket.updated_at))}</span></span><span class="tag">${esc(ticket.status)}</span>`;
+        button.addEventListener("click", () => openTicket(ticket.id));
+        box.appendChild(button);
+      }
+    } catch (error) { box.innerHTML = `<p class="muted">${esc(error.message)}</p>`; }
+  }
+
+  async function openTicket(id) {
+    try {
+      const { ticket, messages } = await api(`/api/v1/support/tickets/${id}`);
+      selectedTicket = ticket.id;
+      $("#ticket-title").textContent = ticket.subject;
+      $("#ticket-meta").textContent = `Ticket #${ticket.id} · ${ticket.category} · ${ticket.status} · opened ${date(ticket.created_at)}`;
+      const thread = $("#thread");
+      thread.replaceChildren();
+      for (const entry of messages) {
+        const article = document.createElement("article");
+        article.className = "row";
+        article.style.cssText = "display:block;white-space:pre-wrap;overflow-wrap:anywhere";
+        const heading = document.createElement("strong");
+        heading.textContent = `${entry.role === "admin" ? "Rune Haven Support" : "You"} · ${date(entry.created_at)}`;
+        const body = document.createElement("p");
+        body.style.cssText = "margin:10px 0 0;color:var(--ink)";
+        body.textContent = entry.body;
+        article.append(heading, body);
+        thread.appendChild(article);
+      }
+      if (!dialog.open) dialog.showModal();
+    } catch (error) { setMsg(msg, error.message, "error"); }
+  }
+
+  $("#ticket-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    try {
+      const result = await api("/api/v1/support/tickets", { method: "POST", body: {
+        category: $("#category").value,
+        subject: $("#subject").value,
+        message: $("#message").value,
+      } });
+      event.currentTarget.reset();
+      setMsg(msg, `Ticket #${result.id} sent.`, "ok");
+      await loadTickets();
+      await openTicket(result.id);
+    } catch (error) { setMsg(msg, error.message, "error"); }
+    finally { button.disabled = false; }
+  });
+
+  $("#reply-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.submitter;
+    button.disabled = true;
+    try {
+      await api(`/api/v1/support/tickets/${selectedTicket}/messages`, { method: "POST", body: { message: $("#reply").value } });
+      $("#reply").value = "";
+      await openTicket(selectedTicket);
+      await loadTickets();
+    } catch (error) { RH.toast(error.message); }
+    finally { button.disabled = false; }
+  });
+
+  $("#ticket-close").addEventListener("click", () => dialog.close());
+  $("#refresh").addEventListener("click", loadTickets);
+  if (guard()) loadTickets();
+</script>
+</body>
+</html>

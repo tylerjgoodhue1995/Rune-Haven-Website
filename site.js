@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const KEY = "rh-session";
-  const NAV = [["/", "Home"], ["/dashboard.html", "Dashboard"], ["/market.html", "Marketplace"], ["/news.html", "News"]];
+  const NAV = [["/", "Home"], ["/dashboard.html", "Dashboard"], ["/market.html", "Marketplace"], ["/news.html", "News"], ["/support.html", "Support"]];
   const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
   const $ = (selector, root = document) => root.querySelector(selector);

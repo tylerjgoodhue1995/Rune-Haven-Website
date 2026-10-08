@@ -34,6 +34,7 @@ struct Config {
     alpha_access_path: PathBuf,
     members_path: PathBuf,
     audit_path: PathBuf,
+    support_db: PathBuf,
     admin_wallets: HashSet<String>,
     game_addr: String,
     rpc_url: String,
@@ -56,6 +57,7 @@ impl Config {
             alpha_access_path: var("SITE_ALPHA_ACCESS_PATH", "alpha-access.json").into(),
             members_path: var("SITE_MEMBERS_PATH", "alpha-members.json").into(),
             audit_path: var("SITE_AUDIT_PATH", "admin-audit.jsonl").into(),
+            support_db: var("SITE_SUPPORT_DB", "support.db").into(),
             admin_wallets: var("SITE_ADMIN_WALLETS", "")
                 .split(',')
                 .map(str::trim)
@@ -74,6 +76,7 @@ impl Config {
         }
     }
 }
+mod support;
 
 struct Challenge {
     wallet: String,
@@ -92,6 +95,7 @@ struct AppState {
     cfg: Arc<Config>,
     market: Arc<market::Market>,
     http: reqwest::Client,
+    support: Arc<support::Support>,
     challenges: Arc<Mutex<HashMap<String, Challenge>>>,
     sessions: Arc<Mutex<HashMap<String, Session>>>,
     requests: Arc<Mutex<VecDeque<Instant>>>,
@@ -515,8 +519,10 @@ async fn main() {
         .parse()
         .expect("SITE_API_BIND must be a socket address");
     let market = market::Market::open(&cfg.market_db, &cfg.market_key_file).expect("marketplace storage");
+    let support = support::Support::open(&cfg.support_db).expect("support storage");
     let state = AppState {
         market: Arc::new(market),
+        support: Arc::new(support),
         cfg: Arc::new(cfg),
         http: reqwest::Client::builder().timeout(Duration::from_secs(15)).build().expect("http client"),
         challenges: Arc::default(),
@@ -542,6 +548,9 @@ async fn main() {
         .route("/api/v1/market/listings/{id}/revoke", post(market::revoke))
         .route("/api/v1/market/owned", get(market::owned))
         .route("/api/v1/market/approve", post(market::prepare_approval))
+            .route("/api/v1/support/tickets", get(support::mine).post(support::create))
+            .route("/api/v1/support/tickets/{id}", get(support::detail))
+            .route("/api/v1/support/tickets/{id}/messages", post(support::player_reply))
         .route("/api/v1/game/deliveries", get(market::pending_deliveries))
         .route("/api/v1/game/entitlements/{wallet}", get(market::entitlements))
         .route("/api/v1/game/deliveries/{id}/ack", post(market::ack_delivery))
@@ -550,6 +559,10 @@ async fn main() {
         .route("/api/v1/admin/market/mint-character", post(market::mint_character))
         .route("/api/v1/admin/market/mint-land", post(market::mint_land))
         .route("/api/v1/admin/market/mint-building", post(market::mint_building))
+            .route("/api/v1/admin/support/tickets", get(support::admin_list))
+            .route("/api/v1/admin/support/tickets/{id}", get(support::admin_detail))
+            .route("/api/v1/admin/support/tickets/{id}/messages", post(support::admin_reply))
+            .route("/api/v1/admin/support/tickets/{id}/status", put(support::admin_status))
         .route("/api/v1/admin/overview", get(admin::overview))
         .route("/api/v1/admin/members", get(admin::members).post(admin::add))
         .route("/api/v1/admin/members/{wallet}", put(admin::update).delete(admin::remove))

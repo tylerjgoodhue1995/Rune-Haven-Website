@@ -29,14 +29,14 @@
       </div>
       <p class="msg" id="msg" role="status" aria-live="polite"></p>
       <div class="card" style="margin-top:18px">
-        <div class="list" id="listings"><p class="muted">Loading…</p></div>
+        <div class="list" id="listings"><p class="muted">Loading...</p></div>
       </div>
       <p class="muted" id="fee" style="margin-top:14px"></p>
     </div>
   </main>
   <footer class="bottom" id="bottom"></footer>
 </div>
-<script src="/site.js?v=20261007d"></script>
+<script src="/site.js?v=20261008a"></script>
 <script>
   const { $, esc, api, shell, guard, signIn, setMsg, short, b58, provider, fmtUnits } = RH;
   shell("/market.html");
@@ -74,11 +74,11 @@
   }
 
   const buy = (listing, button) => run(button, async () => {
-    setMsg(msg, "Preparing your purchase…");
+    setMsg(msg, "Preparing your purchase...");
     const prepared = await api(`/api/v1/market/listings/${listing.id}/purchase`, { method: "POST", body: {} });
-    setMsg(msg, "Approve the transaction in Phantom…");
+    setMsg(msg, "Approve the transaction in Phantom...");
     const signature = await sign(prepared.transaction);
-    setMsg(msg, "Confirming on Solana…");
+    setMsg(msg, "Confirming on Solana...");
     const result = await api(`/api/v1/market/listings/${listing.id}/confirm`, { method: "POST", body: { signature } });
     setMsg(msg, result.message, result.verified ? "ok" : "error");
     if (result.verified) load();
@@ -88,11 +88,11 @@
     if (!token) throw new Error("VGLD is not configured yet.");
     const price = toUnits(input.value, token.decimals);
     if (!asset.approved) {
-      setMsg(msg, "Approve the marketplace for this asset in Phantom…");
+      setMsg(msg, "Approve the marketplace for this asset in Phantom...");
       const prepared = await api("/api/v1/market/approve", { method: "POST", body: { mint: asset.mint } });
       await sign(prepared.transaction);
     }
-    setMsg(msg, "Creating your listing…");
+    setMsg(msg, "Creating your listing...");
     for (let attempt = 0; ; attempt++) {
       try { await api("/api/v1/market/listings", { method: "POST", body: { mint: asset.mint, price } }); break; }
       catch (error) { if (attempt >= 12 || !/Approve the marketplace/.test(error.message)) throw error; await sleep(2000); }
@@ -135,14 +135,14 @@
         for (const listing of mine) {
           const row = document.createElement("div");
           row.className = "row";
-          row.innerHTML = `<span><strong>${esc(listing.name)}</strong><br><span class="muted">${esc(listing.kind)} · listed at ${esc(price(listing.price))}</span></span>`;
+          row.innerHTML = `<span><strong>${esc(listing.name)}</strong><br><span class="muted">${esc(listing.kind)} - listed at ${esc(price(listing.price))}</span></span>`;
           row.appendChild(button("Cancel", "quiet", (node) => unlist(listing, node)));
           box.appendChild(row);
         }
         for (const asset of assets.filter((a) => !a.listed)) {
           const row = document.createElement("div");
           row.className = "row";
-          row.innerHTML = `<span><strong>${esc(asset.name)}</strong><br><span class="muted">${esc(asset.kind)} · ${esc(short(asset.mint))}${asset.approved ? " · approved" : ""}</span></span>`;
+          row.innerHTML = `<span><strong>${esc(asset.name)}</strong><br><span class="muted">${esc(asset.kind)} - ${esc(short(asset.mint))}${asset.approved ? " - approved" : ""}</span></span>`;
           const form = document.createElement("span");
           const input = document.createElement("input");
           input.className = "text";input.placeholder = "Price in VGLD";
@@ -165,7 +165,7 @@
       for (const listing of data.listings) {
         const row = document.createElement("div");
         row.className = "row";
-        row.innerHTML = `<span><strong>${esc(listing.name)}</strong><br><span class="muted">${esc(listing.reference)} · Seller ${esc(short(listing.seller))}</span></span>`;
+        row.innerHTML = `<span><strong>${esc(listing.name)}</strong><br><span class="muted">${esc(listing.reference)} - Seller ${esc(short(listing.seller))}</span></span>`;
         const side = document.createElement("span");
         side.innerHTML = `<strong>${esc(price(listing.price))}</strong> `;
         side.appendChild(listing.seller === me ? button("Yours", "quiet", () => {}) : button("Buy", "gold", (node) => buy(listing, node)));
